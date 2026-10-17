@@ -6,30 +6,50 @@
     <title>Planificador de Turnos</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-center items-center p-6 font-sans">
-    <main class="max-w-xl w-full bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center">
-        <h1 class="text-3xl font-extrabold text-[#00CCFF] mb-3 tracking-tight">Planificador de Turnos</h1>
-        <p class="text-slate-600 mb-6 text-base leading-relaxed">
-            Sistema de planificación académica y gestión de turnos laborales.
-        </p>
-        <div class="inline-flex items-center px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-sm font-semibold mb-6">
-            <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-            Servidor activo · SQLite WAL
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-start items-center p-4 md:p-8 font-sans">
+    <header class="max-w-6xl w-full flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
+        <div class="text-center md:text-left">
+            <h1 class="text-3xl font-extrabold text-[#00CCFF] tracking-tight">Planificador de Turnos</h1>
+            <p class="text-slate-600 text-sm mt-1">
+                Sistema de planificación académica y gestión de turnos laborales.
+            </p>
         </div>
 
-        {% if user.is_authenticated %}
-        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
-            <p class="text-base font-medium text-slate-700 mb-3">Hola, {{ user.username }}</p>
-            <div class="flex justify-center gap-3">
-                <a href="/logout/" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-lg shadow-sm transition">
+        <div class="flex items-center gap-3">
+            <div class="inline-flex items-center px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-xs font-semibold">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
+                Servidor activo · SQLite WAL
+            </div>
+
+            {% if user.is_authenticated %}
+            <div class="flex items-center gap-2 bg-white border border-slate-200 px-3.5 py-1.5 rounded-full text-xs shadow-sm">
+                <span class="font-medium text-slate-700">Hola, {{ user.username }}</span>
+                <a href="/logout/" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-semibold ml-2 transition">
                     Cerrar sesión
                 </a>
             </div>
-        </div>
-        {% else %}
-        <div class="flex justify-center gap-4">
-            <a href="/login/" class="px-5 py-2.5 bg-[#00CCFF] hover:opacity-90 text-slate-900 font-semibold rounded-lg shadow-sm transition">
+            {% else %}
+            <a href="/login/" class="px-4 py-2 bg-[#00CCFF] hover:opacity-90 text-slate-900 text-xs font-bold rounded-xl shadow-sm transition">
                 Iniciar sesión
+            </a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="max-w-6xl w-full">
+        {% if user.is_authenticated %}
+            {% include "turnos/calendario.html" %}
+        {% else %}
+        <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center mt-12">
+            <div class="w-12 h-12 bg-cyan-50 text-[#00CCFF] rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 border border-cyan-100">
+                🔒
+            </div>
+            <h2 class="text-xl font-bold text-slate-900 mb-2">Acceso a la planificación</h2>
+            <p class="text-slate-600 mb-6 text-sm leading-relaxed">
+                Inicia sesión con tu cuenta de Pau o compañero para consultar la rotación tri-semanal de fábrica y disponibilidad.
+            </p>
+            <a href="/login/" class="inline-block px-6 py-2.5 bg-[#00CCFF] hover:opacity-90 text-slate-950 font-bold rounded-xl shadow-md transition text-sm">
+                Iniciar sesión ahora
             </a>
         </div>
         {% endif %}
