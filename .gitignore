@@ -1,0 +1,13 @@
+# Secretos: NUNCA en git (el método los quiere en .env, fuera del repo).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Ruido del sistema.
+.DS_Store
+Thumbs.db
+
+# Lo generado en local (logs, capturas, dumps).
+.runtime/
