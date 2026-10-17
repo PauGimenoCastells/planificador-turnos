@@ -16,11 +16,23 @@
             <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
             Servidor activo · SQLite WAL
         </div>
+
+        {% if user.is_authenticated %}
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+            <p class="text-base font-medium text-slate-700 mb-3">Hola, {{ user.username }}</p>
+            <div class="flex justify-center gap-3">
+                <a href="/logout/" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-lg shadow-sm transition">
+                    Cerrar sesión
+                </a>
+            </div>
+        </div>
+        {% else %}
         <div class="flex justify-center gap-4">
-            <a href="/admin/" class="px-5 py-2.5 bg-[#00CCFF] hover:opacity-90 text-slate-900 font-semibold rounded-lg shadow-sm transition">
-                Panel de Administración
+            <a href="/login/" class="px-5 py-2.5 bg-[#00CCFF] hover:opacity-90 text-slate-900 font-semibold rounded-lg shadow-sm transition">
+                Iniciar sesión
             </a>
         </div>
+        {% endif %}
     </main>
 </body>
 </html>
