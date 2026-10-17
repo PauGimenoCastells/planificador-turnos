@@ -140,6 +140,10 @@
                     <span>Acento y clases: #00CCFF</span>
                 </div>
                 <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#0369A1]"></span>
+                    <span>Clase reubicada: #0369A1</span>
+                </div>
+                <div class="flex items-center gap-1.5">
                     <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
                     <span>Alerta solapamiento con clase</span>
                 </div>
@@ -238,7 +242,9 @@
                         <div
                             class="absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden border
                                 {% if bloque.tiene_solapamiento %}
-                                    z-20 left-2 right-1 ring-2 ring-rose-500 border-rose-500 bg-rose-50/95
+                                    z-20 left-2 right-1 ring-2 ring-rose-500 border-rose-500 bg-rose-50/95 cursor-pointer hover:ring-rose-600
+                                {% elif bloque.tipo == 'clase' and bloque.reubicada %}
+                                    z-10 left-1 right-1 bg-sky-50/95 border-2 border-[#0369A1] ring-1 ring-[#0369A1]/40 cursor-pointer hover:border-sky-800
                                 {% else %}
                                     z-10 left-1 right-1
                                     {% if bloque.tipo == 'fabrica' and dia.codigo_turno == 'A' %}
@@ -248,18 +254,31 @@
                                     {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'C' %}
                                         bg-purple-100/90 border-purple-400 hover:border-purple-500
                                     {% elif bloque.tipo == 'clase' %}
-                                        bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50
+                                        bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50 cursor-pointer
                                     {% else %}
                                         bg-slate-100/90 border-slate-300
                                     {% endif %}
                                 {% endif %}
                             "
                             style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px;"
-                            title="{{ bloque.titulo }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}){% if bloque.tiene_solapamiento %} - ALERTA: {{ bloque.motivo_solapamiento }}{% endif %}"
+                            title="{{ bloque.titulo }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}){% if bloque.tiene_solapamiento %} - ALERTA: {{ bloque.motivo_solapamiento }}{% elif bloque.reubicada %} - Clase reubicada{% endif %}"
+                            {% if bloque.tipo == 'clase' %}
+                            data-clase-bloque="true"
+                            data-uid="{{ bloque.uid_evento|default:bloque.id }}"
+                            data-titulo="{{ bloque.titulo }}"
+                            data-fecha-orig="{{ bloque.fecha_original|date:'Y-m-d' }}"
+                            data-hora-orig="{{ bloque.hora_inicio_original_str|default:bloque.hora_inicio_str }}"
+                            data-nueva-fecha="{{ bloque.fecha|date:'Y-m-d' }}"
+                            data-nueva-hora="{{ bloque.hora_inicio_str }}"
+                            data-reubicada="{% if bloque.reubicada %}true{% else %}false{% endif %}"
+                            data-solapamiento="{% if bloque.tiene_solapamiento %}true{% else %}false{% endif %}"
+                            onclick="abrirModalReubicacion(this)"
+                            {% endif %}
                         >
                             <div class="flex items-center justify-between gap-1 mb-0.5">
                                 <span class="font-bold text-[11px] truncate
                                     {% if bloque.tiene_solapamiento %}text-rose-900
+                                    {% elif bloque.tipo == 'clase' and bloque.reubicada %}text-[#0369A1]
                                     {% elif bloque.tipo == 'clase' %}text-[#0E7490]
                                     {% else %}text-slate-900{% endif %}
                                 ">
@@ -274,11 +293,18 @@
                                 <span class="px-1.5 py-0.2 bg-rose-600 text-white font-black text-[9px] rounded uppercase shrink-0 animate-pulse">
                                     Alerta Solapamiento
                                 </span>
+                                {% elif bloque.tipo == 'clase' and bloque.reubicada %}
+                                <span class="px-1.5 py-0.2 bg-[#0369A1] text-white font-bold text-[9px] rounded uppercase shrink-0">
+                                    Reubicada
+                                </span>
                                 {% endif %}
                             </div>
 
                             <div class="text-[10px] font-mono text-slate-600 truncate">
                                 🕒 {{ bloque.hora_inicio_str }} &rarr; {{ bloque.hora_fin_str }}
+                                {% if bloque.reubicada %}
+                                <span class="text-[9px] text-[#0369A1] font-semibold">(orig. {{ bloque.hora_inicio_original_str }})</span>
+                                {% endif %}
                             </div>
 
                             {% if bloque.tiene_solapamiento %}
@@ -294,4 +320,163 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL DE REUBICACIÓN DE CLASES UNIVERSITARIAS -->
+    <div id="modal-reubicar" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
+            <!-- Cabecera del modal -->
+            <div class="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">🎓</span>
+                    <div>
+                        <h3 id="modal-titulo" class="text-base font-bold text-white leading-tight">Reubicar Clase Universitaria</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Mover a un momento posterior no solapado</p>
+                    </div>
+                </div>
+                <button type="button" onclick="cerrarModalReubicacion()" class="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg transition" title="Cerrar">&times;</button>
+            </div>
+
+            <!-- Cuerpo del modal -->
+            <div class="p-5 space-y-4 text-slate-800 text-sm">
+                <!-- Info de la clase -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Clase Universitaria</span>
+                    <div id="modal-clase-nombre" class="font-bold text-slate-900 text-base"></div>
+                    <div class="text-xs text-slate-600 flex items-center gap-1.5 mt-1 font-mono">
+                        <span>Horario original:</span>
+                        <span id="modal-clase-horario-orig" class="font-bold text-slate-800"></span>
+                    </div>
+                    <div id="modal-aviso-solapamiento" class="hidden text-[11px] font-bold text-rose-600 mt-1">
+                        ⚠️ Esta clase presenta conflicto con tu turno laboral o autobús de fábrica.
+                    </div>
+                    <div id="modal-badge-reubicada" class="hidden text-[11px] font-bold text-[#0369A1] mt-1">
+                        ℹ️ Esta clase está actualmente reubicada respecto al horario universitario.
+                    </div>
+                </div>
+
+                <!-- Formulario de Reubicación -->
+                <form id="form-reubicar" method="POST" action="/turnos/reubicar-clase/" onsubmit="return validarMomentoPosterior(event)" class="space-y-4">
+                    {% csrf_token %}
+                    <input type="hidden" name="uid_evento" id="modal-input-uid">
+                    <input type="hidden" name="fecha_original" id="modal-input-fecha-orig">
+                    <input type="hidden" name="hora_inicio_original" id="modal-input-hora-orig">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="modal-input-nueva-fecha" class="block text-xs font-bold text-slate-700 mb-1">Nueva Fecha</label>
+                            <input type="date" name="nueva_fecha" id="modal-input-nueva-fecha" required class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0369A1]">
+                        </div>
+                        <div>
+                            <label for="modal-input-nueva-hora" class="block text-xs font-bold text-slate-700 mb-1">Nueva Hora Inicio</label>
+                            <input type="time" name="nueva_hora_inicio" id="modal-input-nueva-hora" required class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0369A1]">
+                        </div>
+                    </div>
+
+                    <p class="text-[11px] text-slate-500 leading-relaxed">
+                        Restricción: solo se puede reubicar a un momento <strong>estrictamente posterior</strong> al inicio original de la clase.
+                    </p>
+
+                    <div id="modal-error-validacion" class="hidden p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="cerrarModalReubicacion()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" id="btn-guardar-reubicacion" class="px-4 py-2 text-xs font-bold text-white bg-[#0369A1] hover:bg-sky-800 rounded-xl shadow transition">
+                            Guardar reubicación
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Formulario secundario: Restablecer a horario original -->
+                <div id="modal-seccion-restablecer" class="pt-3 border-t border-slate-200 hidden">
+                    <form method="POST" action="/turnos/restablecer-clase/" class="flex items-center justify-between">
+                        {% csrf_token %}
+                        <input type="hidden" name="uid_evento" id="modal-restablecer-uid">
+                        <input type="hidden" name="fecha_original" id="modal-restablecer-fecha-orig">
+                        <span class="text-xs text-slate-500">¿Revertir al horario universitario?</span>
+                        <button type="submit" class="px-3 py-1.5 text-xs font-bold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition">
+                            ↺ Restablecer a horario original
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE INTERACCIÓN DEL MODAL -->
+    <script>
+    function abrirModalReubicacion(elemento) {
+        const uid = elemento.getAttribute('data-uid');
+        const titulo = elemento.getAttribute('data-titulo') || 'Clase Universitaria';
+        const fechaOrig = elemento.getAttribute('data-fecha-orig');
+        const horaOrig = elemento.getAttribute('data-hora-orig');
+        const nuevaFecha = elemento.getAttribute('data-nueva-fecha') || fechaOrig;
+        const nuevaHora = elemento.getAttribute('data-nueva-hora') || horaOrig;
+        const reubicada = elemento.getAttribute('data-reubicada') === 'true';
+        const solapamiento = elemento.getAttribute('data-solapamiento') === 'true';
+
+        document.getElementById('modal-clase-nombre').textContent = titulo;
+        document.getElementById('modal-clase-horario-orig').textContent = `${fechaOrig} a las ${horaOrig}`;
+
+        document.getElementById('modal-input-uid').value = uid;
+        document.getElementById('modal-input-fecha-orig').value = fechaOrig;
+        document.getElementById('modal-input-hora-orig').value = horaOrig;
+
+        const inputFecha = document.getElementById('modal-input-nueva-fecha');
+        const inputHora = document.getElementById('modal-input-nueva-hora');
+        inputFecha.value = nuevaFecha;
+        inputFecha.min = fechaOrig;
+        inputHora.value = nuevaHora;
+
+        document.getElementById('modal-restablecer-uid').value = uid;
+        document.getElementById('modal-restablecer-fecha-orig').value = fechaOrig;
+
+        const avisoSolapamiento = document.getElementById('modal-aviso-solapamiento');
+        if (solapamiento) {
+            avisoSolapamiento.classList.remove('hidden');
+        } else {
+            avisoSolapamiento.classList.add('hidden');
+        }
+
+        const badgeReubicada = document.getElementById('modal-badge-reubicada');
+        const seccionRestablecer = document.getElementById('modal-seccion-restablecer');
+        if (reubicada) {
+            badgeReubicada.classList.remove('hidden');
+            seccionRestablecer.classList.remove('hidden');
+        } else {
+            badgeReubicada.classList.add('hidden');
+            seccionRestablecer.classList.add('hidden');
+        }
+
+        const errorDiv = document.getElementById('modal-error-validacion');
+        errorDiv.classList.add('hidden');
+        errorDiv.textContent = '';
+
+        document.getElementById('modal-reubicar').classList.remove('hidden');
+    }
+
+    function cerrarModalReubicacion() {
+        document.getElementById('modal-reubicar').classList.add('hidden');
+    }
+
+    function validarMomentoPosterior(event) {
+        const fechaOrig = document.getElementById('modal-input-fecha-orig').value;
+        const horaOrig = document.getElementById('modal-input-hora-orig').value;
+        const nuevaFecha = document.getElementById('modal-input-nueva-fecha').value;
+        const nuevaHora = document.getElementById('modal-input-nueva-hora').value;
+
+        const esPosterior = (nuevaFecha > fechaOrig) || (nuevaFecha === fechaOrig && nuevaHora > horaOrig);
+        if (!esPosterior) {
+            event.preventDefault();
+            const errorDiv = document.getElementById('modal-error-validacion');
+            errorDiv.textContent = 'La nueva fecha y hora debe ser estrictamente posterior al inicio original de la clase (' + fechaOrig + ' ' + horaOrig + ').';
+            errorDiv.classList.remove('hidden');
+            return false;
+        }
+        return true;
+    }
+    </script>
 </div>
+

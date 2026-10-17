@@ -57,3 +57,46 @@ class ConfiguracionTurno(models.Model):
         if not config:
             config = cls.objects.create(fecha_base=date(2026, 10, 12), turno_inicial="A")
         return config
+
+
+class ReubicacionClase(models.Model):
+    """Registro de reubicación de una clase universitaria solapada a un momento posterior."""
+
+    configuracion = models.ForeignKey(
+        ConfiguracionTurno,
+        on_delete=models.CASCADE,
+        related_name="reubicaciones",
+        verbose_name="Configuración asociada",
+    )
+    uid_evento = models.CharField(
+        max_length=255,
+        verbose_name="UID del evento iCal",
+    )
+    fecha_original = models.DateField(
+        verbose_name="Fecha original de la clase",
+    )
+    hora_inicio_original = models.TimeField(
+        verbose_name="Hora de inicio original",
+    )
+    nueva_fecha = models.DateField(
+        verbose_name="Nueva fecha asignada",
+    )
+    nueva_hora_inicio = models.TimeField(
+        verbose_name="Nueva hora de inicio asignada",
+    )
+    creado_el = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de reubicación",
+    )
+
+    class Meta:
+        verbose_name = "Reubicación de clase"
+        verbose_name_plural = "Reubicaciones de clases"
+        unique_together = ("configuracion", "uid_evento", "fecha_original")
+
+    def __str__(self) -> str:
+        return (
+            f"Reubicación {self.uid_evento} "
+            f"({self.fecha_original} {self.hora_inicio_original} -> "
+            f"{self.nueva_fecha} {self.nueva_hora_inicio})"
+        )
