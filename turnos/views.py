@@ -1,12 +1,12 @@
-from datetime import date
+from datetime import date, time
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from turnos.ical import descargar_feed_ical
-from turnos.models import ConfiguracionTurno
+from turnos.models import ConfiguracionTurno, ReubicacionClase
 
 
 def usuario_puede_gestionar(user) -> bool:
@@ -94,3 +94,87 @@ def configurar_calendario_uni(request):
             "exito": exito_mensaje,
         },
     )
+
+
+@login_required(login_url="login")
+def reubicar_clase_view(request):
+    """Permite reubicar una clase universitaria solapada a un momento estrictamente posterior."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden reubicar clases."
+        )
+
+    uid_evento = request.POST.get("uid_evento", "").strip()
+    fecha_orig_str = request.POST.get("fecha_original", "").strip()
+    hora_orig_str = request.POST.get("hora_inicio_original", "").strip()
+    nueva_fecha_str = request.POST.get("nueva_fecha", "").strip()
+    nueva_hora_str = request.POST.get("nueva_hora_inicio", "").strip()
+
+    if not (uid_evento and fecha_orig_str and hora_orig_str and nueva_fecha_str and nueva_hora_str):
+        return HttpResponseBadRequest("Faltan parámetros obligatorios para la reubicación.")
+
+    try:
+        fecha_orig = date.fromisoformat(fecha_orig_str)
+        hora_orig = time.fromisoformat(hora_orig_str)
+        nueva_fecha = date.fromisoformat(nueva_fecha_str)
+        nueva_hora = time.fromisoformat(nueva_hora_str)
+    except ValueError:
+        return HttpResponseBadRequest("Formato de fecha u hora inválido.")
+
+    # Validación estricta: nueva fecha y hora debe ser estrictamente posterior al inicio original
+    es_posterior = (nueva_fecha > fecha_orig) or (
+        nueva_fecha == fecha_orig and nueva_hora > hora_orig
+    )
+    if not es_posterior:
+        return HttpResponseBadRequest(
+            "La nueva fecha y hora debe ser estrictamente posterior al inicio original de la clase."
+        )
+
+    config = ConfiguracionTurno.obtener_activa()
+    ReubicacionClase.objects.update_or_create(
+        configuracion=config,
+        uid_evento=uid_evento,
+        fecha_original=fecha_orig,
+        defaults={
+            "hora_inicio_original": hora_orig,
+            "nueva_fecha": nueva_fecha,
+            "nueva_hora_inicio": nueva_hora,
+        },
+    )
+
+    return redirect(f"/?vista=semana&fecha={nueva_fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def restablecer_clase_view(request):
+    """Permite restablecer una clase universitaria reubicada a su horario original iCal."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden restablecer clases."
+        )
+
+    uid_evento = request.POST.get("uid_evento", "").strip()
+    fecha_orig_str = request.POST.get("fecha_original", "").strip()
+
+    if not (uid_evento and fecha_orig_str):
+        return HttpResponseBadRequest("Faltan parámetros obligatorios para el restablecimiento.")
+
+    try:
+        fecha_orig = date.fromisoformat(fecha_orig_str)
+    except ValueError:
+        return HttpResponseBadRequest("Formato de fecha original inválido.")
+
+    config = ConfiguracionTurno.obtener_activa()
+    ReubicacionClase.objects.filter(
+        configuracion=config,
+        uid_evento=uid_evento,
+        fecha_original=fecha_orig,
+    ).delete()
+
+    return redirect(f"/?vista=semana&fecha={fecha_orig.isoformat()}")

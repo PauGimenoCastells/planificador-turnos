@@ -247,6 +247,14 @@ def obtener_eventos_semana(
     domingo = lunes + timedelta(days=6)
     hoy = date.today()
 
+    if config is None:
+        try:
+            from turnos.models import ConfiguracionTurno
+
+            config = ConfiguracionTurno.obtener_activa()
+        except Exception:  # noqa: BLE001
+            config = None
+
     if eventos_ical is None and config is not None and getattr(config, "contenido_ical_cache", ""):
         from turnos.ical import parsear_feed_ical
 
@@ -257,6 +265,51 @@ def obtener_eventos_semana(
         )
     elif eventos_ical is None:
         eventos_ical = []
+
+    # Cargar reubicaciones registradas para la configuración
+    reubicaciones_map = {}
+    if config is not None:
+        try:
+            from turnos.models import ReubicacionClase
+
+            for r in ReubicacionClase.objects.filter(configuracion=config):
+                reubicaciones_map[(r.uid_evento, r.fecha_original)] = r
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    # Aplicar reubicaciones sobre los eventos iCal antes de distribuirlos por día
+    eventos_procesados = []
+    for ev in eventos_ical:
+        ev_copy = dict(ev)
+        if not ev_copy.get("es_hito"):
+            uid = str(ev_copy.get("uid_evento") or ev_copy.get("id", ""))
+            fecha_orig = ev_copy.get("fecha_original", ev_copy.get("fecha"))
+            hora_orig_str = ev_copy.get(
+                "hora_inicio_original_str", ev_copy.get("hora_inicio_str", "")
+            )
+            ev_copy["uid_evento"] = uid
+            ev_copy["fecha_original"] = fecha_orig
+            ev_copy["hora_inicio_original_str"] = hora_orig_str
+
+            clave = (uid, fecha_orig)
+            if clave in reubicaciones_map:
+                r = reubicaciones_map[clave]
+                duracion = max(ev_copy.get("minuto_fin", 0) - ev_copy.get("minuto_inicio", 0), 25)
+                ev_copy["fecha"] = r.nueva_fecha
+                nuevo_min_ini = r.nueva_hora_inicio.hour * 60 + r.nueva_hora_inicio.minute
+                nuevo_min_fin = nuevo_min_ini + duracion
+                ev_copy["minuto_inicio"] = nuevo_min_ini
+                ev_copy["minuto_fin"] = nuevo_min_fin
+                ev_copy["hora_inicio_str"] = r.nueva_hora_inicio.strftime("%H:%M")
+                fin_h = nuevo_min_fin // 60
+                fin_m = nuevo_min_fin % 60
+                ev_copy["hora_fin_str"] = f"{fin_h:02d}:{fin_m:02d}" if fin_h < 24 else "23:59"
+                ev_copy["reubicada"] = True
+                ev_copy["borde_clase"] = "border-2 border-[#0369A1]"
+            else:
+                ev_copy["reubicada"] = False
+                ev_copy["borde_clase"] = "border-[#00CCFF] ring-1 ring-[#00CCFF]/50"
+        eventos_procesados.append(ev_copy)
 
     dias_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     dias_resultado = []
@@ -270,17 +323,29 @@ def obtener_eventos_semana(
             bloques_turno = generar_bloques_dia_turno(info_turno["codigo"], dia_fecha)
 
         # Hitos y clases de este día
-        hitos_dia = [dict(ev) for ev in eventos_ical if ev.get("fecha") == dia_fecha and ev.get("es_hito")]
-        clases_dia = [dict(ev) for ev in eventos_ical if ev.get("fecha") == dia_fecha and not ev.get("es_hito")]
+        hitos_dia = [
+            dict(ev)
+            for ev in eventos_procesados
+            if ev.get("fecha") == dia_fecha and ev.get("es_hito")
+        ]
+        clases_dia = [
+            dict(ev)
+            for ev in eventos_procesados
+            if ev.get("fecha") == dia_fecha and not ev.get("es_hito")
+        ]
 
         # Comprobar solapamientos entre clases y bloques de fábrica/bus
         for clase in clases_dia:
             clase.setdefault("tipo", "clase")
-            clase.setdefault("tiene_solapamiento", False)
-            clase.setdefault("motivo_solapamiento", "")
+            clase["tiene_solapamiento"] = False
+            clase["motivo_solapamiento"] = ""
             clase.setdefault("color_bg", "#E0F7FA")
             clase.setdefault("color_borde", "#00CCFF")
             clase.setdefault("color_texto", "#0E7490")
+            if clase.get("reubicada"):
+                clase["borde_clase"] = "border-2 border-[#0369A1]"
+            else:
+                clase["borde_clase"] = "border-[#00CCFF] ring-1 ring-[#00CCFF]/50"
 
             c_ini = clase["minuto_inicio"]
             c_fin = clase["minuto_fin"]
