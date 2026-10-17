@@ -10,12 +10,17 @@ import recurring_ical_events
 ZONA_MADRID = zoneinfo.ZoneInfo("Europe/Madrid")
 
 
-def descargar_feed_ical(url: str, timeout: int = 10) -> str:
+def descargar_feed_ical(url: str, timeout: int = 15) -> str:
     """Descarga el contenido de un feed iCal (.ics) desde una URL remota."""
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "PlanificadorTurnos/1.0 (+https://github.com/paugi/planificador-turnos)"
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/calendar,text/plain,*/*",
         },
     )
     with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -103,6 +108,11 @@ def parsear_feed_ical(
         minuto_fin = dt_fin_local.hour * 60 + dt_fin_local.minute
         if minuto_fin <= minuto_inicio:
             minuto_fin = min(minuto_inicio + 60, 24 * 60)
+            fin_h = minuto_fin // 60
+            fin_m = minuto_fin % 60
+            hora_fin_str = f"{fin_h:02d}:{fin_m:02d}" if fin_h < 24 else "23:59"
+        else:
+            hora_fin_str = dt_fin_local.strftime("%H:%M")
 
         eventos_procesados.append(
             {
@@ -113,7 +123,7 @@ def parsear_feed_ical(
                 "ubicacion": ubicacion,
                 "fecha": ev_fecha,
                 "hora_inicio_str": dt_inicio_local.strftime("%H:%M"),
-                "hora_fin_str": dt_fin_local.strftime("%H:%M"),
+                "hora_fin_str": hora_fin_str,
                 "minuto_inicio": minuto_inicio,
                 "minuto_fin": minuto_fin,
                 "tiene_solapamiento": False,
