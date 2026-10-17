@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -e
+APP_ENV=test
+E2E_DB=test
+scripts/ci/provision-e2e
+pytest tests/e2e

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -e
+
+case "$APP_ENV" in
+  local|test|e2e)
+    ;;
+  prod|production)
+    exit 1
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+
+case "$E2E_DB" in
+  local|test|e2e)
+    ;;
+  prod|production)
+    exit 1
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+
+python manage.py migrate --database "$E2E_DB"

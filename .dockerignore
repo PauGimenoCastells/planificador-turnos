@@ -1,0 +1,30 @@
+# Secretos y variables de entorno
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Control de versiones
+.git/
+.gitignore
+
+# Base de datos local
+*.sqlite3
+*.db
+db.sqlite3
+
+# Dependencias frontend y caches
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Archivos generados y runtime
+.runtime/

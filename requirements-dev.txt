@@ -1,0 +1,7 @@
+# Dependencias de desarrollo y test
+-r requirements.txt
+pytest>=8.0.0
+pytest-django>=4.9.0
+ruff>=0.8.0
+playwright>=1.49.0
+pip-audit>=2.8.0
