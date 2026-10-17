@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración Calendario Universitario · Planificador de Turnos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-start items-center p-4 md:p-8 font-sans">
+    <header class="max-w-2xl w-full flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-2xl font-extrabold text-[#00CCFF] tracking-tight">Calendario Universitario</h1>
+            <p class="text-slate-500 text-xs mt-1">Suscripción iCal (.ics) para detección de solapamientos con turnos</p>
+        </div>
+        <a href="/?vista=semana" class="text-xs font-semibold px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition shadow-sm">
+            &larr; Volver al calendario
+        </a>
+    </header>
+
+    <main class="max-w-2xl w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-6 md:p-8">
+        {% if error %}
+        <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+            ⚠️ {{ error }}
+        </div>
+        {% endif %}
+
+        {% if exito %}
+        <div class="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+            ✅ {{ exito }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/turnos/calendario-uni/" class="space-y-6">
+            {% csrf_token %}
+
+            <div>
+                <label for="url_ical_uni" class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    URL del feed iCalendar (.ics)
+                </label>
+                <input
+                    type="url"
+                    id="url_ical_uni"
+                    name="url_ical_uni"
+                    value="{{ config.url_ical_uni }}"
+                    placeholder="https://universidad.edu/calendarios/mi_horario.ics"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#00CCFF] text-sm text-slate-900 bg-slate-50 font-mono"
+                >
+                <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                    Introduce el enlace de suscripción proporcionado por el campus virtual de la facultad. Se sincronizarán las clases y se mostrarán en la cuadrícula horaria de 24 horas con acento cyan (#00CCFF).
+                </p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                <div>
+                    <span class="font-bold text-slate-800">Última sincronización:</span>
+                    <span class="ml-1 text-slate-600">
+                        {% if config.sincronizado_el %}
+                            {{ config.sincronizado_el|date:"d/m/Y H:i" }}
+                        {% else %}
+                            Sin sincronizar aún
+                        {% endif %}
+                    </span>
+                </div>
+                {% if config.contenido_ical_cache %}
+                <span class="px-2 py-0.5 bg-cyan-100 text-[#007A99] font-bold rounded text-[10px]">
+                    Feed en caché activo
+                </span>
+                {% endif %}
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <a href="/?vista=semana" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-100 transition">
+                    Cancelar
+                </a>
+                <button type="submit" class="px-5 py-2.5 rounded-xl bg-[#00CCFF] hover:bg-[#00CCFF]/90 text-slate-950 text-xs font-bold shadow-md transition">
+                    Guardar y sincronizar ahora
+                </button>
+            </div>
+        </form>
+    </main>
+</body>
+</html>

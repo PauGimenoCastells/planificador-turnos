@@ -1,37 +1,129 @@
+import calendar
 from datetime import date, timedelta
 
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect, render
 
 from turnos.models import ConfiguracionTurno
-from turnos.rotacion import HORARIOS_TURNOS, obtener_semanas_calendario
+from turnos.rotacion import (
+    HORARIOS_TURNOS,
+    obtener_eventos_semana,
+    obtener_semanas_calendario,
+)
+
+MESES_ES = [
+    "",
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
 
 
 def home(request):
-    """Vista de inicio para la aplicación con integración de calendario."""
+    """Vista de inicio para la aplicación con soporte para vista mensual y semanal horaria."""
     context = {}
     if request.user.is_authenticated:
         config = ConfiguracionTurno.obtener_activa()
+        puede_configurar = request.user.username in ("pau", "admin") or request.user.is_superuser
+
+        vista = request.GET.get("vista", "mes").lower()
+        if vista not in ("mes", "semana"):
+            vista = "mes"
 
         try:
             offset = int(request.GET.get("offset", 0))
         except (ValueError, TypeError):
             offset = 0
 
-        # Fecha de referencia a partir de hoy con el offset de semanas
-        fecha_referencia = date.today() + timedelta(weeks=offset)
-        semanas = obtener_semanas_calendario(fecha_referencia, num_semanas=4, config=config)
+        fecha_hoy = date.today()
+
+        # Determinar fecha de referencia
+        fecha_param = request.GET.get("fecha")
+        if fecha_param:
+            try:
+                fecha_referencia = date.fromisoformat(fecha_param)
+            except ValueError:
+                fecha_referencia = fecha_hoy + timedelta(weeks=offset)
+        else:
+            fecha_referencia = fecha_hoy + timedelta(weeks=offset)
+
+        # Lunes de la semana seleccionada
+        lunes_semana = fecha_referencia - timedelta(days=fecha_referencia.weekday())
+        domingo_semana = lunes_semana + timedelta(days=6)
+
+        # Semanas de vista mensual
+        semanas_mes = obtener_semanas_calendario(fecha_referencia, num_semanas=4, config=config)
+
+        # Días y bloques de vista semanal horaria
+        dias_semana_horaria = obtener_eventos_semana(fecha_lunes=lunes_semana, config=config)
+
+        # Horas del eje vertical (00:00 a 23:00)
+        horas_dia = [f"{h:02d}:00" for h in range(24)]
+
+        # Mini-calendario para el sidebar de la vista semanal
+        cal = calendar.Calendar(firstweekday=0)
+        mini_ano = lunes_semana.year
+        mini_mes = lunes_semana.month
+        semanas_mini_raw = cal.monthdatescalendar(mini_ano, mini_mes)
+        semanas_mini = []
+        for sem in semanas_mini_raw:
+            dias_mini = []
+            for d in sem:
+                dias_mini.append(
+                    {
+                        "numero": d.day,
+                        "fecha_iso": d.isoformat(),
+                        "mismo_mes": d.month == mini_mes,
+                        "es_hoy": d == fecha_hoy,
+                        "en_semana": lunes_semana <= d <= domingo_semana,
+                    }
+                )
+            semanas_mini.append(dias_mini)
+
+        # Enlaces de mes anterior y siguiente para mini-calendario
+        if mini_mes == 1:
+            mini_prev_fecha = date(mini_ano - 1, 12, 1).isoformat()
+        else:
+            mini_prev_fecha = date(mini_ano, mini_mes - 1, 1).isoformat()
+
+        if mini_mes == 12:
+            mini_next_fecha = date(mini_ano + 1, 1, 1).isoformat()
+        else:
+            mini_next_fecha = date(mini_ano, mini_mes + 1, 1).isoformat()
 
         context.update(
             {
                 "config": config,
-                "semanas": semanas,
+                "puede_configurar": puede_configurar,
+                "vista": vista,
                 "offset": offset,
                 "offset_prev": offset - 1,
                 "offset_next": offset + 1,
                 "offset_plus_3": offset + 3,
                 "offset_minus_3": offset - 3,
                 "fecha_referencia": fecha_referencia,
+                "fecha_hoy": fecha_hoy,
+                "fecha_hoy_iso": fecha_hoy.isoformat(),
+                "lunes_semana": lunes_semana,
+                "domingo_semana": domingo_semana,
+                "fecha_semana_anterior": (lunes_semana - timedelta(days=7)).isoformat(),
+                "fecha_semana_siguiente": (lunes_semana + timedelta(days=7)).isoformat(),
+                "titulo_mes_ano": f"{MESES_ES[lunes_semana.month]} {lunes_semana.year}",
+                "mini_prev_fecha": mini_prev_fecha,
+                "mini_next_fecha": mini_next_fecha,
+                "semanas": semanas_mes,
+                "dias_semana": dias_semana_horaria,
+                "horas_dia": horas_dia,
+                "semanas_mini": semanas_mini,
                 "horarios_turnos": HORARIOS_TURNOS,
             }
         )

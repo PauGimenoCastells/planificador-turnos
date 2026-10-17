@@ -12,6 +12,16 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            <!-- Selector de vistas Mes / Semana -->
+            <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 mr-1">
+                <a href="?vista=mes" class="px-3 py-1 text-xs font-bold rounded-lg bg-[#00CCFF] text-slate-950 transition">
+                    Mes
+                </a>
+                <a href="?vista=semana" class="px-3 py-1 text-xs font-medium text-slate-300 hover:text-white transition">
+                    Semana
+                </a>
+            </div>
+
             <a href="?offset={{ offset_prev }}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition" title="Semana anterior">
                 &larr; Anterior
             </a>
@@ -21,12 +31,15 @@
             <a href="?offset={{ offset_next }}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition" title="Siguiente semana">
                 Siguiente &rarr;
             </a>
+
+            {% if puede_configurar %}
             <a href="?offset={{ offset_plus_3 }}" class="px-3 py-1.5 bg-[#00CCFF]/20 hover:bg-[#00CCFF]/30 text-[#00CCFF] text-xs font-semibold rounded-lg border border-[#00CCFF]/40 transition" title="Avanzar 3 semanas para ver la siguiente rotacion de turno">
                 +3 semanas (Rotar) &raquo;
             </a>
-            <a href="/turnos/configurar/" class="px-3.5 py-1.5 bg-[#00CCFF] hover:bg-[#00CCFF]/90 text-slate-950 text-xs font-bold rounded-lg shadow-sm transition ml-2">
+            <a href="/turnos/configurar/" class="px-3.5 py-1.5 bg-[#00CCFF] hover:bg-[#00CCFF]/90 text-slate-950 text-xs font-bold rounded-lg shadow-sm transition ml-1">
                 ⚙ Configurar
             </a>
+            {% endif %}
         </div>
     </div>
 

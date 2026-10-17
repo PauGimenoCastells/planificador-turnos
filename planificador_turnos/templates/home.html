@@ -36,9 +36,13 @@
         </div>
     </header>
 
-    <main class="max-w-6xl w-full">
+    <main class="max-w-7xl w-full">
         {% if user.is_authenticated %}
-            {% include "turnos/calendario.html" %}
+            {% if vista == "semana" %}
+                {% include "turnos/calendario_semanal.html" %}
+            {% else %}
+                {% include "turnos/calendario.html" %}
+            {% endif %}
         {% else %}
         <div class="max-w-xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center mt-12">
             <div class="w-12 h-12 bg-cyan-50 text-[#00CCFF] rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 border border-cyan-100">
