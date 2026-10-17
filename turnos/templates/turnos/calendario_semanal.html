@@ -189,6 +189,24 @@
                             </span>
                             {% endif %}
                         </div>
+
+                        {% if dia.hitos %}
+                        <div class="mt-1 flex flex-col items-center gap-0.5">
+                            {% if dia.hitos|length <= 2 %}
+                                {% for hito in dia.hitos %}
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 truncate max-w-full" title="{{ hito.titulo }} ({{ hito.hora_inicio_str }})">
+                                    <span>📌</span>
+                                    <span class="truncate">{{ hito.titulo }}</span>
+                                </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 text-[#0E7490] border border-[#00CCFF]/50 shadow-sm" title="{% for h in dia.hitos %}{{ h.titulo }} ({{ h.hora_inicio_str }})&#10;{% endfor %}">
+                                    <span>📌</span>
+                                    <span>{{ dia.hitos|length }} entregas/hitos</span>
+                                </span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
@@ -218,22 +236,25 @@
                         <!-- Bloques horarios de eventos posicionados con precisión -->
                         {% for bloque in dia.bloques %}
                         <div
-                            class="absolute left-1 right-1 rounded-lg p-2 transition-all shadow-sm overflow-hidden z-10 border
+                            class="absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden border
                                 {% if bloque.tiene_solapamiento %}
-                                    ring-2 ring-rose-500 border-rose-500 bg-rose-50/95
-                                {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'A' %}
-                                    bg-cyan-100/90 border-[#00CCFF] hover:border-cyan-500
-                                {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'B' %}
-                                    bg-amber-100/90 border-amber-400 hover:border-amber-500
-                                {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'C' %}
-                                    bg-purple-100/90 border-purple-400 hover:border-purple-500
-                                {% elif bloque.tipo == 'clase' %}
-                                    bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50
+                                    z-20 left-2 right-1 ring-2 ring-rose-500 border-rose-500 bg-rose-50/95
                                 {% else %}
-                                    bg-slate-100/90 border-slate-300
+                                    z-10 left-1 right-1
+                                    {% if bloque.tipo == 'fabrica' and dia.codigo_turno == 'A' %}
+                                        bg-cyan-100/90 border-[#00CCFF] hover:border-cyan-500
+                                    {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'B' %}
+                                        bg-amber-100/90 border-amber-400 hover:border-amber-500
+                                    {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'C' %}
+                                        bg-purple-100/90 border-purple-400 hover:border-purple-500
+                                    {% elif bloque.tipo == 'clase' %}
+                                        bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50
+                                    {% else %}
+                                        bg-slate-100/90 border-slate-300
+                                    {% endif %}
                                 {% endif %}
                             "
-                            style="top: {{ bloque.top_percent }}%; height: {{ bloque.height_percent }}%;"
+                            style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px;"
                             title="{{ bloque.titulo }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}){% if bloque.tiene_solapamiento %} - ALERTA: {{ bloque.motivo_solapamiento }}{% endif %}"
                         >
                             <div class="flex items-center justify-between gap-1 mb-0.5">

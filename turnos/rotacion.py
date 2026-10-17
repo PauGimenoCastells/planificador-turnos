@@ -269,8 +269,9 @@ def obtener_eventos_semana(
         if not info_turno["es_descanso"] and info_turno["codigo"]:
             bloques_turno = generar_bloques_dia_turno(info_turno["codigo"], dia_fecha)
 
-        # Clases de este día
-        clases_dia = [dict(ev) for ev in eventos_ical if ev.get("fecha") == dia_fecha]
+        # Hitos y clases de este día
+        hitos_dia = [dict(ev) for ev in eventos_ical if ev.get("fecha") == dia_fecha and ev.get("es_hito")]
+        clases_dia = [dict(ev) for ev in eventos_ical if ev.get("fecha") == dia_fecha and not ev.get("es_hito")]
 
         # Comprobar solapamientos entre clases y bloques de fábrica/bus
         for clase in clases_dia:
@@ -297,12 +298,16 @@ def obtener_eventos_semana(
                         f"Solapa con {clase.get('titulo', 'Clase')} ({clase['hora_inicio_str']}–{clase['hora_fin_str']})"
                     )
 
-        # Combinar bloques y calcular porcentajes CSS
+        # Combinar bloques y calcular posiciones CSS en píxeles y porcentajes
         todos_bloques = bloques_turno + clases_dia
         for b in todos_bloques:
-            b["top_percent"] = round((b["minuto_inicio"] / 1440.0) * 100, 2)
             duracion = max(b["minuto_fin"] - b["minuto_inicio"], 25)
+            b["top_px"] = b["minuto_inicio"]
+            b["height_px"] = duracion
+            b["top_percent"] = round((b["minuto_inicio"] / 1440.0) * 100, 2)
             b["height_percent"] = round((duracion / 1440.0) * 100, 2)
+            b["top_css"] = f"{(b['minuto_inicio'] / 1440.0) * 100:.2f}%"
+            b["height_css"] = f"{(duracion / 1440.0) * 100:.2f}%"
 
         # Ordenar bloques cronológicamente
         todos_bloques.sort(key=lambda x: x["minuto_inicio"])
@@ -322,6 +327,7 @@ def obtener_eventos_semana(
                 "bus_ida": info_turno["bus_ida"],
                 "bus_vuelta": info_turno["bus_vuelta"],
                 "franja_libre": info_turno["franja_libre"],
+                "hitos": hitos_dia,
                 "bloques": todos_bloques,
             }
         )

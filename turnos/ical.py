@@ -76,11 +76,12 @@ def parsear_feed_ical(
             continue
         dtstart_val = dtstart_prop.dt
 
-        # Si es solo date (todo el día), omitir o ajustar a jornada
+        es_hito = False
+        # Si es solo date (todo el día), tratar como hito/evento del día
         if isinstance(dtstart_val, date) and not isinstance(dtstart_val, datetime):
-            # Evento de todo el día
+            es_hito = True
             dt_inicio_local = datetime.combine(dtstart_val, time(9, 0), tzinfo=ZONA_MADRID)
-            dt_fin_local = datetime.combine(dtstart_val, time(13, 0), tzinfo=ZONA_MADRID)
+            dt_fin_local = datetime.combine(dtstart_val, time(10, 0), tzinfo=ZONA_MADRID)
         else:
             if dtstart_val.tzinfo is None:
                 dt_inicio_local = dtstart_val.replace(tzinfo=ZONA_MADRID)
@@ -91,8 +92,11 @@ def parsear_feed_ical(
             if dtend_prop:
                 dtend_val = dtend_prop.dt
                 if isinstance(dtend_val, date) and not isinstance(dtend_val, datetime):
-                    dt_fin_local = datetime.combine(dtend_val, time(13, 0), tzinfo=ZONA_MADRID)
+                    dt_fin_local = datetime.combine(dtend_val, time(10, 0), tzinfo=ZONA_MADRID)
+                    es_hito = True
                 else:
+                    if dtend_val == dtstart_val:
+                        es_hito = True
                     if dtend_val.tzinfo is None:
                         dt_fin_local = dtend_val.replace(tzinfo=ZONA_MADRID)
                     else:
@@ -117,7 +121,8 @@ def parsear_feed_ical(
         eventos_procesados.append(
             {
                 "id": str(ev.get("UID", f"clase-{len(eventos_procesados)}")),
-                "tipo": "clase",
+                "tipo": "hito" if es_hito else "clase",
+                "es_hito": es_hito,
                 "titulo": resumen,
                 "descripcion": descripcion,
                 "ubicacion": ubicacion,
