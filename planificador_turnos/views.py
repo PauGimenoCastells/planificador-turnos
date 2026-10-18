@@ -2,7 +2,10 @@ import calendar
 from datetime import date, timedelta
 
 from django.contrib.auth import authenticate, login, logout
+from django.db import connection
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 
 from turnos.models import ConfiguracionTurno
 from turnos.rotacion import (
@@ -76,6 +79,13 @@ def home(request):
         dias_semana_horaria = obtener_eventos_semana(
             fecha_lunes=lunes_semana, config=config, usuario=request.user
         )
+
+        # Métricas de aprovechamiento de autobús para Pau y administradores (R2, R3)
+        metricas_bus = None
+        if puede_gestionar:
+            from turnos.rotacion import calcular_metricas_autobus
+
+            metricas_bus = calcular_metricas_autobus(dias_semana_horaria)
 
         # Citas pendientes de confirmación para Pau y Admin (R4)
         citas_pendientes = []
@@ -176,6 +186,7 @@ def home(request):
                 "citas_pendientes": citas_pendientes,
                 "mis_contraofertas": mis_contraofertas,
                 "leyenda_usuarios": leyenda_usuarios,
+                "metricas_bus": metricas_bus,
             }
         )
 
@@ -205,3 +216,30 @@ def logout_view(request):
     """Vista de cierre de sesión."""
     logout(request)
     return redirect("home")
+
+
+def health_check_view(request):
+    """Endpoint de diagnóstico y verificación de salud de SQLite y la aplicación (R1)."""
+    try:
+        connection.ensure_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return JsonResponse(
+            {
+                "status": "ok",
+                "db": True,
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=200,
+        )
+    except Exception as e:  # noqa: BLE001
+        return JsonResponse(
+            {
+                "status": "error",
+                "db": False,
+                "error": str(e),
+                "timestamp": timezone.now().isoformat(),
+            },
+            status=500,
+        )
+

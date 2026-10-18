@@ -916,6 +916,90 @@ def obtener_eventos_semana(
     return dias_resultado
 
 
+def formatear_duracion(minutos: int) -> str:
+    """Formatea minutos a formato legible, ej: '3h', '2h 15m', '45m', '0m'."""
+    if minutos <= 0:
+        return "0m"
+    horas = minutos // 60
+    resto = minutos % 60
+    if horas > 0 and resto > 0:
+        return f"{horas}h {resto}m"
+    elif horas > 0:
+        return f"{horas}h"
+    else:
+        return f"{resto}m"
+
+
+def calcular_metricas_autobus(
+    dias_o_fecha: Any, config: Any | None = None
+) -> dict[str, Any]:
+    """Calcula las métricas de aprovechamiento de autobús (total y desglose por actividad).
+
+    Acepta una lista de días (dias_semana) o una fecha de inicio de semana (lunes).
+    Computa las horas y minutos acumulados en los trayectos de autobús (bus_ida y bus_vuelta)
+    que tienen actividades registradas en la semana visible.
+    """
+    if isinstance(dias_o_fecha, (date, datetime)):
+        dias_semana = obtener_eventos_semana(fecha_lunes=dias_o_fecha, config=config)
+    elif isinstance(dias_o_fecha, list):
+        dias_semana = dias_o_fecha
+    else:
+        dias_semana = []
+
+    codigos_actividades = ["siesta", "lectura", "reflexion", "videojuegos", "videos"]
+    desglose = {
+        cod: {
+            "codigo": cod,
+            "label": ACTIVIDADES_CATALOGO_INFO[cod]["label"],
+            "emoji": ACTIVIDADES_CATALOGO_INFO[cod]["emoji"],
+            "badge": ACTIVIDADES_CATALOGO_INFO[cod]["badge"],
+            "minutos": 0,
+            "tiempo_formateado": "0m",
+            "contador": 0,
+        }
+        for cod in codigos_actividades
+    }
+
+    total_minutos = 0
+    total_trayectos = 0
+
+    for dia in dias_semana:
+        for b in dia.get("bloques", []):
+            if b.get("tipo") in ("bus_ida", "bus_vuelta"):
+                acts = b.get("actividades", [])
+                if acts:
+                    min_ini = b.get("minuto_inicio")
+                    min_fin = b.get("minuto_fin")
+                    if min_ini is not None and min_fin is not None and min_fin > min_ini:
+                        duracion = min_fin - min_ini
+                    else:
+                        duracion = 0
+                    if duracion > 0:
+                        total_minutos += duracion
+                        total_trayectos += 1
+                        for act in acts:
+                            if act in desglose:
+                                desglose[act]["minutos"] += duracion
+                                desglose[act]["contador"] += 1
+
+    for cod in codigos_actividades:
+        desglose[cod]["tiempo_formateado"] = formatear_duracion(desglose[cod]["minutos"])
+
+    return {
+        "total_minutos": total_minutos,
+        "total_formateado": formatear_duracion(total_minutos),
+        "total_horas": round(total_minutos / 60.0, 2),
+        "total_trayectos": total_trayectos,
+        "por_actividad": desglose,
+        "desglose": list(desglose.values()),
+        "siesta": desglose["siesta"],
+        "lectura": desglose["lectura"],
+        "reflexion": desglose["reflexion"],
+        "videojuegos": desglose["videojuegos"],
+        "videos": desglose["videos"],
+    }
+
+
 def obtener_semanas_calendario(
     fecha_referencia: date,
     num_semanas: int | None = None,
