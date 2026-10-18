@@ -69,7 +69,23 @@ def home(request):
         semanas_mes = obtener_semanas_calendario(fecha_referencia, num_semanas=4, config=config)
 
         # Días y bloques de vista semanal horaria
-        dias_semana_horaria = obtener_eventos_semana(fecha_lunes=lunes_semana, config=config)
+        dias_semana_horaria = obtener_eventos_semana(
+            fecha_lunes=lunes_semana, config=config, usuario=request.user
+        )
+
+        # Citas pendientes de confirmación para Pau y Admin (R4)
+        citas_pendientes = []
+        if puede_gestionar:
+            try:
+                from turnos.models import Cita
+
+                citas_pendientes = list(
+                    Cita.objects.filter(estado="solicitada")
+                    .select_related("solicitante")
+                    .order_by("fecha", "hora_inicio")
+                )
+            except Exception:  # noqa: BLE001
+                citas_pendientes = []
 
         # Horas del eje vertical (00:00 a 23:00)
         horas_dia = [f"{h:02d}:00" for h in range(24)]
@@ -131,6 +147,7 @@ def home(request):
                 "horas_dia": horas_dia,
                 "semanas_mini": semanas_mini,
                 "horarios_turnos": HORARIOS_TURNOS,
+                "citas_pendientes": citas_pendientes,
             }
         )
 
