@@ -27,7 +27,8 @@
                 </a>
             </div>
 
-            <!-- Selector de vistas Mes / Semana -->
+            <!-- Selector de vistas Mes / Semana (solo gestores) -->
+            {% if puede_gestionar %}
             <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 ml-2">
                 <a href="?vista=mes" class="px-3 py-1 text-xs font-medium text-slate-300 hover:text-white transition">
                     Mes
@@ -37,10 +38,11 @@
                 </a>
             </div>
 
-            <!-- Enlace a configuración de Calendario Universitario iCal -->
+            <!-- Enlace a configuración de Calendario Universitario iCal (solo gestores) -->
             <a href="/turnos/calendario-uni/" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold rounded-lg border border-slate-700 transition flex items-center gap-1.5 ml-1">
                 <span>🎓</span> Calendario Uni
             </a>
+            {% endif %}
 
             <!-- Acceso a configuración de turnos (solo admin o pau) -->
             {% if puede_configurar %}
@@ -126,11 +128,13 @@
                     </div>
                 </div>
 
+                {% if puede_gestionar %}
                 <div class="pt-2">
                     <a href="/turnos/calendario-uni/" class="inline-flex items-center gap-1.5 text-[11px] text-[#007A99] hover:underline font-bold">
                         ⚙ Gestionar feed iCal (.ics) &rarr;
                     </a>
                 </div>
+                {% endif %}
             </div>
 
             <!-- Leyenda de colores -->
@@ -242,9 +246,9 @@
                         <div
                             class="absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden border
                                 {% if bloque.tiene_solapamiento %}
-                                    z-20 left-2 right-1 ring-2 ring-rose-500 border-rose-500 bg-rose-50/95 cursor-pointer hover:ring-rose-600
+                                    z-20 left-2 right-1 ring-2 ring-rose-500 border-rose-500 bg-rose-50/95 {% if puede_gestionar %}cursor-pointer hover:ring-rose-600{% endif %}
                                 {% elif bloque.tipo == 'clase' and bloque.reubicada %}
-                                    z-10 left-1 right-1 bg-sky-50/95 border-2 border-[#0369A1] ring-1 ring-[#0369A1]/40 cursor-pointer hover:border-sky-800
+                                    z-10 left-1 right-1 bg-sky-50/95 border-2 border-[#0369A1] ring-1 ring-[#0369A1]/40 {% if puede_gestionar %}cursor-pointer hover:border-sky-800{% endif %}
                                 {% else %}
                                     z-10 left-1 right-1
                                     {% if bloque.tipo == 'fabrica' and dia.codigo_turno == 'A' %}
@@ -254,7 +258,7 @@
                                     {% elif bloque.tipo == 'fabrica' and dia.codigo_turno == 'C' %}
                                         bg-purple-100/90 border-purple-400 hover:border-purple-500
                                     {% elif bloque.tipo == 'clase' %}
-                                        bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50 cursor-pointer
+                                        bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50 {% if puede_gestionar %}cursor-pointer{% endif %}
                                     {% else %}
                                         bg-slate-100/90 border-slate-300
                                     {% endif %}
@@ -262,7 +266,7 @@
                             "
                             style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px;"
                             title="{{ bloque.titulo }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}){% if bloque.tiene_solapamiento %} - ALERTA: {{ bloque.motivo_solapamiento }}{% elif bloque.reubicada %} - Clase reubicada{% endif %}"
-                            {% if bloque.tipo == 'clase' %}
+                            {% if bloque.tipo == 'clase' and puede_gestionar %}
                             data-clase-bloque="true"
                             data-uid="{{ bloque.uid_evento|default:bloque.id }}"
                             data-titulo="{{ bloque.titulo }}"
@@ -321,6 +325,7 @@
         </div>
     </div>
 
+    {% if puede_gestionar %}
     <!-- MODAL DE REUBICACIÓN DE CLASES UNIVERSITARIAS -->
     <div id="modal-reubicar" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
         <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -478,5 +483,6 @@
         return true;
     }
     </script>
+    {% endif %}
 </div>
 

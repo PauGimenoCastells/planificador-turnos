@@ -10,6 +10,7 @@ from turnos.rotacion import (
     obtener_eventos_semana,
     obtener_semanas_calendario,
 )
+from turnos.views import usuario_puede_gestionar
 
 MESES_ES = [
     "",
@@ -33,11 +34,15 @@ def home(request):
     context = {}
     if request.user.is_authenticated:
         config = ConfiguracionTurno.obtener_activa()
-        puede_configurar = request.user.username in ("pau", "admin") or request.user.is_superuser
+        puede_gestionar = usuario_puede_gestionar(request.user)
+        puede_configurar = puede_gestionar
 
-        vista = request.GET.get("vista", "mes").lower()
-        if vista not in ("mes", "semana"):
-            vista = "mes"
+        if puede_gestionar:
+            vista = request.GET.get("vista", "mes").lower()
+            if vista not in ("mes", "semana"):
+                vista = "mes"
+        else:
+            vista = "semana"
 
         try:
             offset = int(request.GET.get("offset", 0))
@@ -104,6 +109,7 @@ def home(request):
             {
                 "config": config,
                 "puede_configurar": puede_configurar,
+                "puede_gestionar": puede_gestionar,
                 "vista": vista,
                 "offset": offset,
                 "offset_prev": offset - 1,
