@@ -176,3 +176,41 @@ class Cita(models.Model):
             f"Cita de {self.solicitante.username} "
             f"({self.fecha} {self.hora_inicio}–{self.hora_fin}) [{self.estado}]"
         )
+
+
+class ActividadAutobus(models.Model):
+    """Registro interactivo de actividades realizadas por Pau en trayectos de autobús pasados."""
+
+    OPCIONES_BUS: ClassVar[list[tuple[str, str]]] = [
+        ("bus_ida", "Autobús Ida"),
+        ("bus_vuelta", "Autobús Vuelta"),
+    ]
+
+    fecha = models.DateField(
+        verbose_name="Fecha del trayecto",
+    )
+    tipo_bus = models.CharField(
+        max_length=20,
+        choices=OPCIONES_BUS,
+        verbose_name="Tipo de autobús",
+    )
+    actividades = models.JSONField(
+        default=list,
+        verbose_name="Actividades realizadas",
+    )
+    creado_el = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de registro",
+    )
+    actualizado_el = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Última actualización",
+    )
+
+    class Meta:
+        verbose_name = "Actividad en autobús"
+        verbose_name_plural = "Actividades en autobuses"
+        unique_together = ("fecha", "tipo_bus")
+
+    def __str__(self) -> str:
+        return f"Actividades {self.tipo_bus} ({self.fecha}): {', '.join(self.actividades)}"

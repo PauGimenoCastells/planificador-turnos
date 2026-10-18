@@ -8,6 +8,7 @@ from turnos.views import (
     configurar_turnos,
     confirmar_cita_view,
     contraofertar_cita_view,
+    guardar_actividades_bus_view,
     rechazar_cita_view,
     responder_contraoferta_view,
     restablecer_clase_view,
@@ -31,5 +32,10 @@ urlpatterns = [
     path("turnos/contraofertar-cita/", contraofertar_cita_view, name="contraofertar_cita"),
     path(
         "turnos/responder-contraoferta/", responder_contraoferta_view, name="responder_contraoferta"
+    ),
+    path(
+        "turnos/guardar-actividades-bus/",
+        guardar_actividades_bus_view,
+        name="guardar_actividades_bus",
     ),
 ]
