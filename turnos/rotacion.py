@@ -413,6 +413,103 @@ def obtener_franjas_disponibles_semana(
     return FranjasSemana(dias_list)
 
 
+def calcular_subdivision_citas(citas_bloques: list[dict[str, Any]]) -> None:
+    """Calcula la subdivisión y posicionamiento visual de citas concurrentes solapadas:
+
+    - 1 cita: ancho completo normal.
+    - 2 citas: división vertical (50% ancho cada una).
+    - 3 citas: división vertical en 3 columnas (33.3% ancho cada una).
+    - 4 citas: cuadrícula 2x2 (50% ancho x 50% alto).
+    - >4 citas: división en N columnas.
+    """
+    if not citas_bloques:
+        return
+
+    citas_ordenadas = sorted(citas_bloques, key=lambda c: (c["minuto_inicio"], c["minuto_fin"]))
+    clusters: list[list[dict[str, Any]]] = []
+
+    for cita in citas_ordenadas:
+        agregada = False
+        for cluster in clusters:
+            if any(
+                max(cita["minuto_inicio"], c["minuto_inicio"])
+                < min(cita["minuto_fin"], c["minuto_fin"])
+                for c in cluster
+            ):
+                cluster.append(cita)
+                agregada = True
+                break
+        if not agregada:
+            clusters.append([cita])
+
+    merged_clusters: list[list[dict[str, Any]]] = []
+    for cluster in clusters:
+        fusionado = False
+        for mc in merged_clusters:
+            if any(
+                max(c1["minuto_inicio"], c2["minuto_inicio"])
+                < min(c1["minuto_fin"], c2["minuto_fin"])
+                for c1 in cluster
+                for c2 in mc
+            ):
+                mc.extend([c for c in cluster if c not in mc])
+                fusionado = True
+                break
+        if not fusionado:
+            merged_clusters.append(cluster)
+
+    for cluster in merged_clusters:
+        n = len(cluster)
+        cluster.sort(key=lambda c: (c["minuto_inicio"], c["solicitante"]))
+        if n == 1:
+            c = cluster[0]
+            c["layout_modo"] = "normal"
+            c["posicion_css"] = "left: 4px; right: 4px;"
+        elif n == 2:
+            c0, c1 = cluster[0], cluster[1]
+            c0["layout_modo"] = "col-2"
+            c0["posicion_css"] = "left: 4px; width: calc(50% - 6px);"
+            c1["layout_modo"] = "col-2"
+            c1["posicion_css"] = "left: calc(50% + 2px); width: calc(50% - 6px);"
+        elif n == 3:
+            for idx, c in enumerate(cluster):
+                c["layout_modo"] = "col-3"
+                if idx == 0:
+                    c["posicion_css"] = "left: 4px; width: calc(33.333% - 5px);"
+                elif idx == 1:
+                    c["posicion_css"] = "left: calc(33.333% + 2px); width: calc(33.333% - 5px);"
+                else:
+                    c["posicion_css"] = "left: calc(66.666% + 2px); width: calc(33.333% - 5px);"
+        elif n == 4:
+            cluster_ini = min(c["minuto_inicio"] for c in cluster)
+            cluster_fin = max(c["minuto_fin"] for c in cluster)
+            cluster_dur = max(cluster_fin - cluster_ini, 50)
+            mitad_h = cluster_dur // 2
+            for idx, c in enumerate(cluster):
+                c["layout_modo"] = "grid-2x2"
+                col = idx % 2
+                row = idx // 2
+                top = cluster_ini + (row * mitad_h)
+                height = mitad_h - 2
+                c["top_px"] = top
+                c["height_px"] = height
+                if col == 0:
+                    c["posicion_css"] = (
+                        f"left: 4px; width: calc(50% - 6px); top: {top}px; height: {height}px;"
+                    )
+                else:
+                    c["posicion_css"] = (
+                        f"left: calc(50% + 2px); width: calc(50% - 6px); top: {top}px; height: {height}px;"
+                    )
+        else:
+            w = 100.0 / n
+            for idx, c in enumerate(cluster):
+                c["layout_modo"] = f"col-{n}"
+                c["posicion_css"] = (
+                    f"left: calc({idx * w:.2f}% + 2px); width: calc({w:.2f}% - 4px);"
+                )
+
+
 def obtener_eventos_semana(
     fecha_lunes: date,
     config: Any | None = None,
@@ -571,7 +668,7 @@ def obtener_eventos_semana(
 
             citas_qs = (
                 Cita.objects.filter(fecha=dia_fecha)
-                .exclude(estado="rechazada")
+                .exclude(estado__in=["rechazada", "caducada"])
                 .select_related("solicitante")
             )
             for cita in citas_qs:
@@ -611,6 +708,8 @@ def obtener_eventos_semana(
                         "motivo_solapamiento": "",
                     }
                 )
+
+            calcular_subdivision_citas(citas_bloques)
         except Exception:  # noqa: BLE001, S110
             pass
 
@@ -618,8 +717,9 @@ def obtener_eventos_semana(
         todos_bloques = bloques_turno + clases_dia + citas_bloques
         for b in todos_bloques:
             duracion = max(b["minuto_fin"] - b["minuto_inicio"], 25)
-            b["top_px"] = b["minuto_inicio"]
-            b["height_px"] = duracion
+            if b.get("layout_modo") != "grid-2x2":
+                b["top_px"] = b["minuto_inicio"]
+                b["height_px"] = duracion
             b["top_percent"] = round((b["minuto_inicio"] / 1440.0) * 100, 2)
             b["height_percent"] = round((duracion / 1440.0) * 100, 2)
             b["top_css"] = f"{(b['minuto_inicio'] / 1440.0) * 100:.2f}%"
@@ -662,14 +762,33 @@ def obtener_semanas_calendario(
     semanas = []
     hoy = date.today()
 
+    citas_por_dia: dict[date, list[Any]] = {}
+    try:
+        from turnos.models import Cita
+
+        fin_semanas = lunes_inicio + timedelta(days=num_semanas * 7)
+        citas_qs = (
+            Cita.objects.filter(fecha__gte=lunes_inicio, fecha__lte=fin_semanas)
+            .exclude(estado__in=["rechazada", "caducada"])
+            .select_related("solicitante")
+        )
+        for c in citas_qs:
+            citas_por_dia.setdefault(c.fecha, []).append(c)
+    except Exception:  # noqa: BLE001, S110
+        pass
+
     for s in range(num_semanas):
         dias_semana = []
         for d in range(7):
             dia = lunes_inicio + timedelta(days=s * 7 + d)
             info = obtener_turno_dia(dia, config=config)
+            info["fecha"] = dia
             info["es_hoy"] = dia == hoy
             info["numero_dia"] = dia.day
             info["mes"] = dia.strftime("%b")
+            citas_dia = citas_por_dia.get(dia, [])
+            info["citas"] = citas_dia
+            info["total_citas"] = len(citas_dia)
             dias_semana.append(info)
         semanas.append(dias_semana)
 

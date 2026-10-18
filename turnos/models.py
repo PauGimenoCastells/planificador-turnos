@@ -110,6 +110,7 @@ class Cita(models.Model):
         ("solicitada", "Solicitada"),
         ("confirmada", "Confirmada"),
         ("rechazada", "Rechazada"),
+        ("caducada", "Caducada"),
     ]
 
     solicitante = models.ForeignKey(

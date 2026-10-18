@@ -33,6 +33,10 @@ def home(request):
     """Vista de inicio para la aplicación con soporte para vista mensual y semanal horaria."""
     context = {}
     if request.user.is_authenticated:
+        from turnos.views import purgar_o_caducar_citas_vencidas
+
+        purgar_o_caducar_citas_vencidas()
+
         config = ConfiguracionTurno.obtener_activa()
         puede_gestionar = usuario_puede_gestionar(request.user)
         puede_configurar = puede_gestionar
