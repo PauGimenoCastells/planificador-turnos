@@ -507,13 +507,17 @@
                                         bg-purple-100/90 border-purple-400 hover:border-purple-500
                                     {% elif bloque.tipo == 'clase' %}
                                         bg-cyan-50/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50 {% if puede_gestionar %}cursor-pointer{% endif %}
+                                    {% elif 'bus' in bloque.tipo and puede_gestionar and bloque.ha_pasado %}
+                                        bg-slate-100/95 border-[#00CCFF] ring-1 ring-[#00CCFF]/50 cursor-pointer hover:border-cyan-600 hover:shadow-md
+                                    {% elif 'bus' in bloque.tipo and puede_gestionar %}
+                                        bg-slate-100/90 border-slate-300 cursor-pointer hover:bg-slate-200/80
                                     {% else %}
                                         bg-slate-100/90 border-slate-300
                                     {% endif %}
                                 {% endif %}
                             "
                             style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px;"
-                            title="{{ bloque.titulo }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}){% if bloque.tiene_solapamiento %} - ALERTA: {{ bloque.motivo_solapamiento }}{% elif bloque.reubicada %} - Clase reubicada{% endif %}"
+                            title="{{ bloque.titulo }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}){% if bloque.tiene_solapamiento %} - ALERTA: {{ bloque.motivo_solapamiento }}{% elif bloque.reubicada %} - Clase reubicada{% elif 'bus' in bloque.tipo and puede_gestionar and bloque.ha_pasado %} - Clic para registrar o editar actividades{% elif 'bus' in bloque.tipo and puede_gestionar %} - Trayecto futuro (disponible al completarse){% endif %}"
                             {% if bloque.tipo == 'clase' and puede_gestionar %}
                             data-clase-bloque="true"
                             data-uid="{{ bloque.uid_evento|default:bloque.id }}"
@@ -525,6 +529,18 @@
                             data-reubicada="{% if bloque.reubicada %}true{% else %}false{% endif %}"
                             data-solapamiento="{% if bloque.tiene_solapamiento %}true{% else %}false{% endif %}"
                             onclick="abrirModalReubicacion(this)"
+                            {% elif 'bus' in bloque.tipo and puede_gestionar %}
+                            data-bus-bloque="true"
+                            data-fecha="{{ dia.fecha|date:'Y-m-d' }}"
+                            data-tipo-bus="{{ bloque.tipo }}"
+                            data-titulo="{{ bloque.titulo }}"
+                            data-actividades="{{ bloque.actividades|join:',' }}"
+                            data-ha-pasado="{% if bloque.ha_pasado %}true{% else %}false{% endif %}"
+                            {% if bloque.ha_pasado %}
+                            onclick="abrirModalActividadesBus(this)"
+                            {% else %}
+                            onclick="avisoTrayectoFuturo()"
+                            {% endif %}
                             {% endif %}
                         >
                             <div class="flex items-center justify-between gap-1 mb-0.5">
@@ -532,6 +548,7 @@
                                     {% if bloque.tiene_solapamiento %}text-rose-900
                                     {% elif bloque.tipo == 'clase' and bloque.reubicada %}text-[#0369A1]
                                     {% elif bloque.tipo == 'clase' %}text-[#0E7490]
+                                    {% elif 'bus' in bloque.tipo and bloque.ha_pasado %}text-cyan-950
                                     {% else %}text-slate-900{% endif %}
                                 ">
                                     {% if not puede_gestionar and bloque.titulo == 'No disponible' %}🔒
@@ -559,6 +576,16 @@
                                 <span class="text-[9px] text-[#0369A1] font-semibold">(orig. {{ bloque.hora_inicio_original_str }})</span>
                                 {% endif %}
                             </div>
+
+                            {% if 'bus' in bloque.tipo and bloque.actividades_detalle %}
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                {% for act in bloque.actividades_detalle %}
+                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-white/95 text-slate-800 rounded text-[9px] font-bold border border-slate-300 shadow-xs" title="{{ act.label }}">
+                                    {{ act.badge }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
 
                             {% if bloque.tiene_solapamiento %}
                             <div class="text-[9px] font-bold text-rose-700 mt-0.5 leading-tight truncate">
@@ -660,8 +687,127 @@
         </div>
     </div>
 
+    <!-- MODAL DE REGISTRO DE ACTIVIDADES EN AUTOBÚS (R1-R3) -->
+    <div id="modal-actividades-bus" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-bus-titulo">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
+            <!-- Cabecera del modal -->
+            <div class="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">🚌</span>
+                    <div>
+                        <h3 id="modal-bus-titulo" class="text-base font-bold text-white leading-tight">Actividades en autobús</h3>
+                        <p id="modal-bus-subtitulo" class="text-xs text-slate-400 mt-0.5">Registro de actividades en trayecto completado</p>
+                    </div>
+                </div>
+                <button type="button" onclick="cerrarModalActividadesBus()" class="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg transition" title="Cerrar">&times;</button>
+            </div>
+
+            <!-- Formulario de actividades -->
+            <form id="form-actividades-bus" method="POST" action="/turnos/guardar-actividades-bus/" class="p-5 space-y-4 text-slate-800 text-sm">
+                {% csrf_token %}
+                <input type="hidden" name="fecha" id="modal-bus-input-fecha">
+                <input type="hidden" name="tipo_bus" id="modal-bus-input-tipo">
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Trayecto</span>
+                    <div id="modal-bus-trayecto-nombre" class="font-bold text-slate-900 text-sm"></div>
+                    <div id="modal-bus-trayecto-fecha" class="text-xs font-mono text-slate-600"></div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-2">Selecciona las actividades realizadas:</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                            <input type="checkbox" name="actividades" value="siesta" id="check-act-siesta" class="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500">
+                            <span class="text-sm font-medium text-slate-800 flex items-center gap-2">
+                                <span class="text-base">😴</span> Siesta
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                            <input type="checkbox" name="actividades" value="lectura" id="check-act-lectura" class="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500">
+                            <span class="text-sm font-medium text-slate-800 flex items-center gap-2">
+                                <span class="text-base">📖</span> Lectura
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                            <input type="checkbox" name="actividades" value="reflexion" id="check-act-reflexion" class="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500">
+                            <span class="text-sm font-medium text-slate-800 flex items-center gap-2">
+                                <span class="text-base">🧠</span> Reflexión
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                            <input type="checkbox" name="actividades" value="videojuegos" id="check-act-videojuegos" class="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500">
+                            <span class="text-sm font-medium text-slate-800 flex items-center gap-2">
+                                <span class="text-base">🎮</span> Videojuegos
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                            <input type="checkbox" name="actividades" value="videos" id="check-act-videos" class="w-4 h-4 text-cyan-600 rounded border-slate-300 focus:ring-cyan-500">
+                            <span class="text-sm font-medium text-slate-800 flex items-center gap-2">
+                                <span class="text-base">🎬</span> Vídeos
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="cerrarModalActividadesBus()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="btn-guardar-actividades-bus" class="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow transition">
+                        Guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- SCRIPT DE INTERACCIÓN DEL MODAL -->
     <script>
+    function abrirModalActividadesBus(elOrFecha, tipoBus, titulo, actividades) {
+        var fecha = elOrFecha;
+        var acts = actividades || [];
+        if (typeof elOrFecha === 'object' && elOrFecha !== null) {
+            fecha = elOrFecha.getAttribute('data-fecha');
+            tipoBus = elOrFecha.getAttribute('data-tipo-bus');
+            titulo = elOrFecha.getAttribute('data-titulo');
+            var actsStr = elOrFecha.getAttribute('data-actividades') || '';
+            acts = actsStr ? actsStr.split(',') : [];
+        } else if (typeof actividades === 'string') {
+            try {
+                acts = JSON.parse(actividades);
+            } catch (e) {
+                acts = actividades.split(',');
+            }
+        }
+
+        document.getElementById('modal-bus-input-fecha').value = fecha;
+        document.getElementById('modal-bus-input-tipo').value = tipoBus;
+        document.getElementById('modal-bus-trayecto-nombre').textContent = titulo || (tipoBus === 'bus_ida' ? 'Autobús Ida' : 'Autobús Vuelta');
+        document.getElementById('modal-bus-trayecto-fecha').textContent = 'Fecha: ' + fecha;
+
+        var checkboxes = ['siesta', 'lectura', 'reflexion', 'videojuegos', 'videos'];
+        checkboxes.forEach(function(cat) {
+            var el = document.getElementById('check-act-' + cat);
+            if (el) {
+                el.checked = acts.includes(cat);
+            }
+        });
+
+        document.getElementById('modal-actividades-bus').classList.remove('hidden');
+    }
+
+    function cerrarModalActividadesBus() {
+        var modal = document.getElementById('modal-actividades-bus');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    function avisoTrayectoFuturo() {
+        alert('El registro de actividades se habilita una vez completado el trayecto de autobús.');
+    }
+
     function abrirModalReubicacion(elemento) {
         const uid = elemento.getAttribute('data-uid');
         const titulo = elemento.getAttribute('data-titulo') || 'Clase Universitaria';

@@ -6,8 +6,14 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from turnos.ical import descargar_feed_ical
-from turnos.models import Cita, ConfiguracionTurno, ReubicacionClase
-from turnos.rotacion import obtener_franjas_disponibles_semana
+from turnos.models import ActividadAutobus, Cita, ConfiguracionTurno, ReubicacionClase
+from turnos.rotacion import (
+    generar_bloques_dia_turno,
+    obtener_franjas_disponibles_semana,
+    obtener_turno_dia,
+)
+
+CATALOGO_ACTIVIDADES = ["siesta", "lectura", "reflexion", "videojuegos", "videos"]
 
 
 def purgar_o_caducar_citas_vencidas() -> int:
@@ -477,3 +483,68 @@ def responder_contraoferta_view(request):
         return HttpResponseBadRequest("Acción no válida. Debe ser 'aceptar' o 'rechazar'.")
 
     return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def guardar_actividades_bus_view(request):
+    """Permite a Pau registrar o actualizar las actividades realizadas en un trayecto de autobús completado."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden registrar actividades."
+        )
+
+    fecha_str = request.POST.get("fecha", "").strip()
+    tipo_bus = request.POST.get("tipo_bus", "").strip()
+    actividades = request.POST.getlist("actividades")
+
+    if not (fecha_str and tipo_bus):
+        return HttpResponseBadRequest("Faltan parámetros obligatorios (fecha y tipo_bus).")
+
+    try:
+        fecha = date.fromisoformat(fecha_str)
+    except ValueError:
+        return HttpResponseBadRequest("Formato de fecha inválido.")
+
+    if tipo_bus not in ("bus_ida", "bus_vuelta"):
+        return HttpResponseBadRequest(
+            "Tipo de autobús inválido. Debe ser 'bus_ida' o 'bus_vuelta'."
+        )
+
+    # Validar que todas las actividades pertenecen al catálogo permitido (R3 - Criterio Portante)
+    for act in actividades:
+        if act not in CATALOGO_ACTIVIDADES:
+            return HttpResponseBadRequest(
+                f"Actividad no permitida: '{act}'. Las opciones válidas son: {', '.join(CATALOGO_ACTIVIDADES)}."
+            )
+
+    # Validar que el trayecto ya ha finalizado (R2)
+    info_turno = obtener_turno_dia(fecha)
+    if info_turno.get("es_descanso") or not info_turno.get("codigo"):
+        return HttpResponseBadRequest("No existen trayectos de autobús en días de descanso.")
+
+    bloques = generar_bloques_dia_turno(info_turno["codigo"], fecha)
+    bloque_bus = next((b for b in bloques if b["tipo"] == tipo_bus), None)
+    if not bloque_bus:
+        return HttpResponseBadRequest("No se encontró el trayecto de autobús para el día indicado.")
+
+    hora_fin = time.fromisoformat(bloque_bus["hora_fin_str"])
+    fin_dt = datetime.combine(fecha, hora_fin)
+    if timezone.is_naive(fin_dt):
+        fin_dt = timezone.make_aware(fin_dt, timezone.get_current_timezone())
+
+    if fin_dt > timezone.now():
+        return HttpResponseBadRequest(
+            "El registro de actividades solo se permite en trayectos de autobús que ya hayan finalizado."
+        )
+
+    actividades_limpias = list(dict.fromkeys(actividades))
+    ActividadAutobus.objects.update_or_create(
+        fecha=fecha,
+        tipo_bus=tipo_bus,
+        defaults={"actividades": actividades_limpias},
+    )
+
+    return redirect(f"/?vista=semana&fecha={fecha.isoformat()}")

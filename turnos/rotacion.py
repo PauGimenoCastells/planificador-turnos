@@ -1,5 +1,25 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
+
+from django.utils import timezone
+
+ACTIVIDADES_CATALOGO_INFO = {
+    "siesta": {"codigo": "siesta", "label": "Siesta", "emoji": "😴", "badge": "😴 Siesta"},
+    "lectura": {"codigo": "lectura", "label": "Lectura", "emoji": "📖", "badge": "📖 Lectura"},
+    "reflexion": {
+        "codigo": "reflexion",
+        "label": "Reflexión",
+        "emoji": "🧠",
+        "badge": "🧠 Reflexión",
+    },
+    "videojuegos": {
+        "codigo": "videojuegos",
+        "label": "Videojuegos",
+        "emoji": "🎮",
+        "badge": "🎮 Videojuegos",
+    },
+    "videos": {"codigo": "videos", "label": "Vídeos", "emoji": "🎬", "badge": "🎬 Vídeos"},
+}
 
 COLORES_SOLICITANTES = {
     "pol": "#10B981",
@@ -598,6 +618,16 @@ def obtener_eventos_semana(
                 ev_copy["borde_clase"] = "border-[#00CCFF] ring-1 ring-[#00CCFF]/50"
         eventos_procesados.append(ev_copy)
 
+    fin_semana = lunes + timedelta(days=6)
+    actividades_bus_map: dict[tuple[date, str], list[str]] = {}
+    try:
+        from turnos.models import ActividadAutobus
+
+        for act in ActividadAutobus.objects.filter(fecha__gte=lunes, fecha__lte=fin_semana):
+            actividades_bus_map[(act.fecha, act.tipo_bus)] = act.actividades
+    except Exception:  # noqa: BLE001, S110
+        pass
+
     dias_nombres = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     dias_resultado = []
 
@@ -608,6 +638,25 @@ def obtener_eventos_semana(
         bloques_turno: list[dict[str, Any]] = []
         if not info_turno["es_descanso"] and info_turno["codigo"]:
             bloques_turno = generar_bloques_dia_turno(info_turno["codigo"], dia_fecha)
+
+        ahora = timezone.now()
+        for b in bloques_turno:
+            if b.get("tipo") in ("bus_ida", "bus_vuelta"):
+                b["fecha"] = dia_fecha
+                acts = actividades_bus_map.get((dia_fecha, b["tipo"]), [])
+                b["actividades"] = acts
+                b["actividades_detalle"] = [
+                    ACTIVIDADES_CATALOGO_INFO[a] for a in acts if a in ACTIVIDADES_CATALOGO_INFO
+                ]
+                h_fin_str = b["hora_fin_str"]
+                if h_fin_str == "24:00":
+                    hora_fin = time(23, 59, 59)
+                else:
+                    hora_fin = time.fromisoformat(h_fin_str)
+                fin_dt = datetime.combine(dia_fecha, hora_fin)
+                if timezone.is_naive(fin_dt):
+                    fin_dt = timezone.make_aware(fin_dt, timezone.get_current_timezone())
+                b["ha_pasado"] = fin_dt <= ahora
 
         # Hitos y clases de este día
         hitos_dia = [
@@ -675,6 +724,8 @@ def obtener_eventos_semana(
                 b["titulo"] = "No disponible"
                 b["tiene_solapamiento"] = False
                 b["motivo_solapamiento"] = ""
+                b["actividades"] = []
+                b["actividades_detalle"] = []
             for c in clases_dia:
                 c["titulo"] = "No disponible"
                 c["tiene_solapamiento"] = False
