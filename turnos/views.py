@@ -324,3 +324,156 @@ def rechazar_cita_view(request):
     cita.save()
 
     return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def cancelar_cita_view(request):
+    """Permite al solicitante (o a Pau/Admin) cancelar una cita en cualquier momento."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    cita_id = request.POST.get("cita_id", "").strip()
+    if not cita_id:
+        return HttpResponseBadRequest("Falta el identificador de la cita.")
+
+    try:
+        cita = Cita.objects.get(id=cita_id)
+    except (Cita.DoesNotExist, ValueError):
+        return HttpResponseBadRequest("Cita no encontrada.")
+
+    es_dueno = cita.solicitante == request.user
+    es_gestor = usuario_puede_gestionar(request.user)
+    if not (es_dueno or es_gestor):
+        return HttpResponseForbidden("Acceso denegado: no tiene permisos para cancelar esta cita.")
+
+    if cita.estado not in ("solicitada", "confirmada", "contraoferta"):
+        return HttpResponseBadRequest("La cita ya no puede ser cancelada en su estado actual.")
+
+    cita.estado = "cancelada"
+    cita.save()
+
+    return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def contraofertar_cita_view(request):
+    """Permite a Pau o administradores enviar una contraoferta con horario alternativo."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden enviar contraofertas."
+        )
+
+    cita_id = request.POST.get("cita_id", "").strip()
+    nueva_fecha_str = request.POST.get("nueva_fecha", "").strip()
+    nueva_hora_ini_str = request.POST.get("nueva_hora_inicio", "").strip()
+    nueva_hora_fin_str = request.POST.get("nueva_hora_fin", "").strip()
+    mensaje = request.POST.get("mensaje_contraoferta", "").strip()
+
+    if not (cita_id and nueva_fecha_str and nueva_hora_ini_str and nueva_hora_fin_str):
+        return HttpResponseBadRequest("Faltan parámetros obligatorios para la contraoferta.")
+
+    if len(mensaje) > 250:
+        return HttpResponseBadRequest(
+            f"El mensaje de contraoferta no puede superar 250 caracteres (enviados: {len(mensaje)})."
+        )
+
+    try:
+        nueva_fecha = date.fromisoformat(nueva_fecha_str)
+        nueva_hora_ini = time.fromisoformat(nueva_hora_ini_str)
+        nueva_hora_fin = time.fromisoformat(nueva_hora_fin_str)
+    except ValueError:
+        return HttpResponseBadRequest("Formato de fecha u hora inválido.")
+
+    if nueva_hora_fin <= nueva_hora_ini:
+        return HttpResponseBadRequest(
+            "La hora de fin debe ser estrictamente posterior a la hora de inicio."
+        )
+
+    # Validar que la contraoferta cae dentro de una franja disponible de Pau (R5)
+    franjas_sem = obtener_franjas_disponibles_semana(nueva_fecha)
+    franjas_dia = franjas_sem.get(nueva_fecha, [])
+    req_ini = nueva_hora_ini.hour * 60 + nueva_hora_ini.minute
+    req_fin = nueva_hora_fin.hour * 60 + nueva_hora_fin.minute
+
+    cae_en_disponible = any(
+        f["minuto_inicio"] <= req_ini and req_fin <= f["minuto_fin"] for f in franjas_dia
+    )
+    if not cae_en_disponible:
+        return HttpResponseBadRequest(
+            "La propuesta no cae dentro de una franja disponible de Pau para ese día."
+        )
+
+    # Validar antelación mínima de 12 horas (R5)
+    ahora = timezone.now()
+    propuesta_dt = datetime.combine(nueva_fecha, nueva_hora_ini)
+    if timezone.is_naive(propuesta_dt):
+        propuesta_dt = timezone.make_aware(propuesta_dt, timezone.get_current_timezone())
+
+    if ahora <= propuesta_dt < ahora + timedelta(hours=12):
+        return HttpResponseBadRequest(
+            "La contraoferta debe realizarse con al menos 12 horas de antelación respecto a la hora propuesta."
+        )
+
+    try:
+        cita = Cita.objects.get(id=cita_id)
+    except (Cita.DoesNotExist, ValueError):
+        return HttpResponseBadRequest("Cita no encontrada.")
+
+    if cita.estado != "solicitada":
+        return HttpResponseBadRequest(
+            "Solo se pueden enviar contraofertas a citas en estado solicitada."
+        )
+
+    cita.estado = "contraoferta"
+    cita.fecha_propuesta = nueva_fecha
+    cita.hora_inicio_propuesta = nueva_hora_ini
+    cita.hora_fin_propuesta = nueva_hora_fin
+    cita.mensaje_contraoferta = mensaje
+    cita.save()
+
+    return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def responder_contraoferta_view(request):
+    """Permite al solicitante aceptar o rechazar una contraoferta recibida de Pau."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    cita_id = request.POST.get("cita_id", "").strip()
+    accion = request.POST.get("accion", "").strip().lower()
+
+    if not (cita_id and accion):
+        return HttpResponseBadRequest("Faltan parámetros obligatorios.")
+
+    try:
+        cita = Cita.objects.get(id=cita_id)
+    except (Cita.DoesNotExist, ValueError):
+        return HttpResponseBadRequest("Cita no encontrada.")
+
+    if cita.solicitante != request.user:
+        return HttpResponseForbidden(
+            "Acceso denegado: solo el solicitante de la cita puede responder a la contraoferta."
+        )
+
+    if cita.estado != "contraoferta":
+        return HttpResponseBadRequest("La cita no tiene una contraoferta pendiente de respuesta.")
+
+    if accion == "aceptar":
+        if not (cita.fecha_propuesta and cita.hora_inicio_propuesta and cita.hora_fin_propuesta):
+            return HttpResponseBadRequest("Datos de la propuesta incompletos.")
+        cita.fecha = cita.fecha_propuesta
+        cita.hora_inicio = cita.hora_inicio_propuesta
+        cita.hora_fin = cita.hora_fin_propuesta
+        cita.estado = "confirmada"
+        cita.save()
+    elif accion == "rechazar":
+        cita.estado = "rechazada"
+        cita.save()
+    else:
+        return HttpResponseBadRequest("Acción no válida. Debe ser 'aceptar' o 'rechazar'.")
+
+    return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")
