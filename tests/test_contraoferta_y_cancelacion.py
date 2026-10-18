@@ -380,3 +380,50 @@ def test_r6_clases_universitarias_fuera_de_disponibilidad_conflicto(datos_test):
 
     assert clase_bloque["tiene_solapamiento"] is True
     assert "fuera de franja de disponibilidad" in clase_bloque["motivo_solapamiento"].lower()
+
+
+# ==============================================================================
+# UNIDAD 010: Acciones de confirmar, rechazar y contraoferta en modal de cuadrícula
+# ==============================================================================
+@pytest.mark.django_db
+def test_acciones_cita_modal_cuadricula_para_pau(datos_test):
+    """
+    R1-R3: En el modal de detalle de cita de la cuadrícula (#modal-detalle-cita),
+    cuando Pau o el admin está conectado, para citas en estado 'solicitada'
+    deben estar disponibles los botones y formularios de:
+    - Confirmar (/turnos/confirmar-cita/)
+    - Rechazar (/turnos/rechazar-cita/)
+    - Contraoferta (botón con acción para abrir contraoferta)
+    Mientras que para un solicitante normal (ej. Pol) no deben aparecer opciones de gestión de Pau.
+    """
+    lunes = date(2026, 10, 19)
+    _cita = Cita.objects.create(
+        solicitante=datos_test["pol"],
+        fecha=lunes + timedelta(days=1),
+        hora_inicio=time(16, 0),
+        hora_fin=time(17, 0),
+        motivo="Revisión de ejercicios",
+        estado="solicitada",
+    )
+
+    client_pau = Client()
+    client_pau.force_login(datos_test["pau"])
+    resp_pau = client_pau.get(f"/?vista=semana&fecha={lunes.isoformat()}")
+    assert resp_pau.status_code == 200
+    html_pau = resp_pau.content.decode("utf-8")
+
+    # En el modal de detalle de cita deben existir las opciones de gestión para Pau
+    assert 'id="modal-detalle-acciones-gestor"' in html_pau
+    assert 'action="/turnos/confirmar-cita/"' in html_pau
+    assert 'action="/turnos/rechazar-cita/"' in html_pau
+    assert 'id="modal-confirmar-cita-id"' in html_pau
+    assert 'id="modal-rechazar-cita-id"' in html_pau
+    assert 'id="btn-detalle-contraoferta"' in html_pau
+
+    # Para el solicitante Pol no deben figurar los botones de gestión de gestor en su vista
+    client_pol = Client()
+    client_pol.force_login(datos_test["pol"])
+    resp_pol = client_pol.get(f"/?vista=semana&fecha={lunes.isoformat()}")
+    assert resp_pol.status_code == 200
+    html_pol = resp_pol.content.decode("utf-8")
+    assert 'id="modal-detalle-acciones-gestor"' not in html_pol
