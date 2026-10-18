@@ -53,6 +53,59 @@
         </div>
     </div>
 
+    {% if puede_gestionar and citas_pendientes %}
+    <!-- PANEL DE AVISOS DE CITAS PENDIENTES (R4) -->
+    <div id="panel-citas-pendientes" class="bg-amber-50 border-b border-amber-200 p-4 md:p-5">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-lg">📅</span>
+                <h3 class="text-sm font-bold text-amber-900">
+                    Solicitudes de Citas Pendientes de Confirmación ({{ citas_pendientes|length }})
+                </h3>
+            </div>
+            <span class="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                Acción requerida
+            </span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {% for cita in citas_pendientes %}
+            <div class="bg-white p-3.5 rounded-xl border border-amber-200/90 shadow-sm flex flex-col justify-between gap-2.5">
+                <div>
+                    <div class="flex items-center justify-between gap-1 mb-1">
+                        <span class="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                            {{ cita.solicitante.username }}
+                        </span>
+                        <span class="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {{ cita.fecha|date:"d/m/Y" }} · {{ cita.hora_inicio|time:"H:i" }}–{{ cita.hora_fin|time:"H:i" }}
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-700 italic bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1.5">
+                        "{{ cita.motivo }}"
+                    </p>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <form method="POST" action="/turnos/rechazar-cita/">
+                        {% csrf_token %}
+                        <input type="hidden" name="cita_id" value="{{ cita.id }}">
+                        <button type="submit" class="px-3 py-1.5 text-xs font-semibold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition" title="Rechazar solicitud">
+                            ✕ Rechazar
+                        </button>
+                    </form>
+                    <form method="POST" action="/turnos/confirmar-cita/">
+                        {% csrf_token %}
+                        <input type="hidden" name="cita_id" value="{{ cita.id }}">
+                        <button type="submit" class="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition" title="Confirmar y bloquear franja">
+                            ✓ Confirmar
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Cuerpo principal: Sidebar lateral + Cuadrícula horaria semanal -->
     <div class="flex flex-col lg:flex-row">
         <!-- BARRA LATERAL IZQUIERDA (Sidebar) -->
@@ -241,8 +294,65 @@
                         <div class="h-[60px] border-b border-slate-100 pointer-events-none"></div>
                         {% endfor %}
 
+                        <!-- Franjas disponibles para solicitar citas (R1, R2) -->
+                        {% for franja in dia.franjas_disponibles %}
+                        <div
+                            class="franja-disponible absolute left-0 right-0 bg-emerald-500/10 hover:bg-emerald-500/20 border-y border-dashed border-emerald-400/50 cursor-pointer transition-colors z-5 group flex items-start justify-end p-1 overflow-hidden"
+                            style="top: {{ franja.top_px }}px; height: {{ franja.height_px }}px;"
+                            data-fecha="{{ dia.fecha|date:'Y-m-d' }}"
+                            data-hora-inicio="{{ franja.hora_inicio_str }}"
+                            data-hora-fin="{{ franja.hora_fin_str }}"
+                            title="Franja disponible: {{ franja.hora_inicio_str }} - {{ franja.hora_fin_str }} (Clic para solicitar cita)"
+                            onclick="abrirModalSolicitarCita('{{ dia.fecha|date:'Y-m-d' }}', '{{ franja.hora_inicio_str }}', '{{ franja.hora_fin_str }}')"
+                        >
+                            <span class="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-emerald-800 bg-white/95 px-1.5 py-0.5 rounded shadow-sm transition-opacity">
+                                + Pedir cita
+                            </span>
+                        </div>
+                        {% endfor %}
+
                         <!-- Bloques horarios de eventos posicionados con precisión -->
                         {% for bloque in dia.bloques %}
+                        {% if bloque.tipo == 'cita' %}
+                        <div
+                            class="cita-bloque absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden z-15 left-1 right-1 border-2
+                                {% if bloque.estado == 'solicitada' %}
+                                    border-dashed
+                                {% else %}
+                                    border-solid shadow-md
+                                {% endif %}
+                            "
+                            style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px; border-color: {{ bloque.color_solicitante }}; {% if bloque.estado == 'solicitada' %}background-color: {{ bloque.color_solicitante }}33; color: #0f172a;{% else %}background-color: {{ bloque.color_solicitante }}; color: #ffffff;{% endif %}"
+                            title="Cita de {{ bloque.solicitante }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}) - Estado: {{ bloque.estado|capfirst }}"
+                        >
+                            <div class="flex items-center justify-between gap-1 mb-0.5">
+                                <span class="font-bold text-[11px] truncate flex items-center gap-1 {% if bloque.estado == 'confirmada' %}text-white{% else %}text-slate-900{% endif %}">
+                                    <span>👤</span>
+                                    {{ bloque.titulo }}
+                                </span>
+
+                                {% if bloque.estado == 'solicitada' %}
+                                <span class="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] rounded uppercase shrink-0">
+                                    Pendiente
+                                </span>
+                                {% else %}
+                                <span class="px-1.5 py-0.2 bg-white/25 text-white font-black text-[9px] rounded uppercase shrink-0">
+                                    Confirmada
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            <div class="text-[10px] font-mono truncate {% if bloque.estado == 'confirmada' %}text-white/90{% else %}text-slate-600{% endif %}">
+                                🕒 {{ bloque.hora_inicio_str }} &rarr; {{ bloque.hora_fin_str }}
+                            </div>
+
+                            {% if bloque.mostrar_motivo and bloque.motivo %}
+                            <div class="text-[10px] italic mt-0.5 leading-tight truncate {% if bloque.estado == 'confirmada' %}text-white/95{% else %}text-slate-700{% endif %}">
+                                "{{ bloque.motivo }}"
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
                         <div
                             class="absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden border
                                 {% if bloque.tiene_solapamiento %}
@@ -286,7 +396,8 @@
                                     {% elif bloque.tipo == 'clase' %}text-[#0E7490]
                                     {% else %}text-slate-900{% endif %}
                                 ">
-                                    {% if bloque.tipo == 'fabrica' %}🏢
+                                    {% if not puede_gestionar and bloque.titulo == 'No disponible' %}🔒
+                                    {% elif bloque.tipo == 'fabrica' %}🏢
                                     {% elif bloque.tipo == 'clase' %}🎓
                                     {% elif 'bus' in bloque.tipo %}🚌
                                     {% endif %}
@@ -317,6 +428,7 @@
                             </div>
                             {% endif %}
                         </div>
+                        {% endif %}
                         {% endfor %}
                     </div>
                     {% endfor %}
@@ -484,5 +596,141 @@
     }
     </script>
     {% endif %}
+
+    <!-- MODAL DE SOLICITAR CITA INTERACTIVA (R2) -->
+    <div id="modal-solicitar-cita" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-cita-titulo">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-150">
+            <!-- Cabecera del modal -->
+            <div class="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">📅</span>
+                    <div>
+                        <h3 id="modal-cita-titulo" class="text-base font-bold text-white leading-tight">Solicitar Cita con Pau</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Reserva en franja disponible del calendario</p>
+                    </div>
+                </div>
+                <button type="button" onclick="cerrarModalSolicitarCita()" class="text-slate-400 hover:text-white text-lg font-bold p-1 rounded-lg transition" title="Cerrar">&times;</button>
+            </div>
+
+            <!-- Cuerpo del formulario -->
+            <div class="p-5 space-y-4 text-slate-800 text-sm">
+                <form id="form-solicitar-cita" method="POST" action="/turnos/solicitar-cita/" onsubmit="return validarSolicitudCita(event)" class="space-y-4">
+                    {% csrf_token %}
+
+                    <div>
+                        <label for="modal-cita-fecha" class="block text-xs font-bold text-slate-700 mb-1">Fecha</label>
+                        <input type="date" name="fecha" id="modal-cita-fecha" required class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="modal-cita-hora-inicio" class="block text-xs font-bold text-slate-700 mb-1">Hora Inicio</label>
+                            <input type="time" name="hora_inicio" id="modal-cita-hora-inicio" required class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div>
+                            <label for="modal-cita-hora-fin" class="block text-xs font-bold text-slate-700 mb-1">Hora Fin</label>
+                            <input type="time" name="hora_fin" id="modal-cita-hora-fin" required class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label for="modal-cita-motivo" class="block text-xs font-bold text-slate-700">Motivo de la cita</label>
+                            <span class="text-[11px] font-mono text-slate-400">
+                                <span id="contador-caracteres" class="font-bold text-slate-600">0</span>/250
+                            </span>
+                        </div>
+                        <textarea
+                            name="motivo"
+                            id="modal-cita-motivo"
+                            maxlength="250"
+                            rows="3"
+                            required
+                            placeholder="Describe el motivo o temas a tratar (máximo 250 caracteres)..."
+                            class="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                            oninput="actualizarContadorCita(this)"
+                        ></textarea>
+                    </div>
+
+                    <div id="modal-cita-error" class="hidden p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" onclick="cerrarModalSolicitarCita()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" id="btn-enviar-cita" class="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow transition">
+                            Enviar Solicitud
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE INTERACCIÓN DE CITAS (R2) -->
+    <script>
+    function abrirModalSolicitarCita(fecha, horaInicio, horaFin) {
+        document.getElementById('modal-cita-fecha').value = fecha;
+        document.getElementById('modal-cita-hora-inicio').value = horaInicio;
+        document.getElementById('modal-cita-hora-fin').value = horaFin;
+
+        const motivoEl = document.getElementById('modal-cita-motivo');
+        motivoEl.value = '';
+        actualizarContadorCita(motivoEl);
+
+        const errorDiv = document.getElementById('modal-cita-error');
+        errorDiv.classList.add('hidden');
+        errorDiv.textContent = '';
+
+        document.getElementById('modal-solicitar-cita').classList.remove('hidden');
+    }
+
+    function cerrarModalSolicitarCita() {
+        document.getElementById('modal-solicitar-cita').classList.add('hidden');
+    }
+
+    function actualizarContadorCita(textarea) {
+        const contador = document.getElementById('contador-caracteres');
+        if (contador) {
+            contador.textContent = textarea.value.length;
+            if (textarea.value.length > 250) {
+                contador.classList.add('text-rose-600');
+            } else {
+                contador.classList.remove('text-rose-600');
+            }
+        }
+    }
+
+    function validarSolicitudCita(event) {
+        const horaInicio = document.getElementById('modal-cita-hora-inicio').value;
+        const horaFin = document.getElementById('modal-cita-hora-fin').value;
+        const motivo = document.getElementById('modal-cita-motivo').value.trim();
+        const errorDiv = document.getElementById('modal-cita-error');
+
+        if (!motivo) {
+            event.preventDefault();
+            errorDiv.textContent = 'El motivo no puede estar vacío.';
+            errorDiv.classList.remove('hidden');
+            return false;
+        }
+
+        if (motivo.length > 250) {
+            event.preventDefault();
+            errorDiv.textContent = 'El motivo no puede superar estrictamente 250 caracteres.';
+            errorDiv.classList.remove('hidden');
+            return false;
+        }
+
+        if (horaFin <= horaInicio) {
+            event.preventDefault();
+            errorDiv.textContent = 'La hora de fin debe ser posterior a la hora de inicio.';
+            errorDiv.classList.remove('hidden');
+            return false;
+        }
+
+        return true;
+    }
+    </script>
 </div>
 

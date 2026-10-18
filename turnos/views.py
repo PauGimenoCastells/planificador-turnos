@@ -6,7 +6,8 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from turnos.ical import descargar_feed_ical
-from turnos.models import ConfiguracionTurno, ReubicacionClase
+from turnos.models import Cita, ConfiguracionTurno, ReubicacionClase
+from turnos.rotacion import obtener_franjas_disponibles_semana
 
 
 def usuario_puede_gestionar(user) -> bool:
@@ -178,3 +179,115 @@ def restablecer_clase_view(request):
     ).delete()
 
     return redirect(f"/?vista=semana&fecha={fecha_orig.isoformat()}")
+
+
+@login_required(login_url="login")
+def solicitar_cita_view(request):
+    """Permite a un usuario solicitar una cita durante una franja disponible de Pau."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    fecha_str = request.POST.get("fecha", "").strip()
+    hora_inicio_str = request.POST.get("hora_inicio", "").strip()
+    hora_fin_str = request.POST.get("hora_fin", "").strip()
+    motivo = request.POST.get("motivo", "").strip()
+
+    if not (fecha_str and hora_inicio_str and hora_fin_str and motivo):
+        return HttpResponseBadRequest("Faltan parámetros obligatorios para solicitar la cita.")
+
+    if len(motivo) > 250:
+        return HttpResponseBadRequest(
+            "El motivo no puede superar estrictamente 250 caracteres (enviados: "
+            f"{len(motivo)} caracteres)."
+        )
+
+    try:
+        fecha = date.fromisoformat(fecha_str)
+        hora_inicio = time.fromisoformat(hora_inicio_str)
+        hora_fin = time.fromisoformat(hora_fin_str)
+    except ValueError:
+        return HttpResponseBadRequest("Formato de fecha u hora inválido.")
+
+    if hora_fin <= hora_inicio:
+        return HttpResponseBadRequest(
+            "La hora de fin debe ser estrictamente posterior a la hora de inicio."
+        )
+
+    # Validar que la cita cae dentro de una franja disponible de Pau
+    franjas_sem = obtener_franjas_disponibles_semana(fecha)
+    franjas_dia = franjas_sem.get(fecha, [])
+
+    req_ini = hora_inicio.hour * 60 + hora_inicio.minute
+    req_fin = hora_fin.hour * 60 + hora_fin.minute
+
+    cae_en_disponible = any(
+        f["minuto_inicio"] <= req_ini and req_fin <= f["minuto_fin"] for f in franjas_dia
+    )
+
+    if not cae_en_disponible:
+        return HttpResponseBadRequest(
+            "La cita solicitada no cae dentro de una franja disponible de Pau para ese día."
+        )
+
+    Cita.objects.create(
+        solicitante=request.user,
+        fecha=fecha,
+        hora_inicio=hora_inicio,
+        hora_fin=hora_fin,
+        motivo=motivo,
+        estado="solicitada",
+    )
+
+    return redirect(f"/?vista=semana&fecha={fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def confirmar_cita_view(request):
+    """Permite a Pau o administradores confirmar una cita solicitada."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden confirmar citas."
+        )
+
+    cita_id = request.POST.get("cita_id", "").strip()
+    if not cita_id:
+        return HttpResponseBadRequest("Falta el identificador de la cita.")
+
+    try:
+        cita = Cita.objects.get(id=cita_id)
+    except (Cita.DoesNotExist, ValueError):
+        return HttpResponseBadRequest("Cita no encontrada.")
+
+    cita.estado = "confirmada"
+    cita.save()
+
+    return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")
+
+
+@login_required(login_url="login")
+def rechazar_cita_view(request):
+    """Permite a Pau o administradores rechazar una cita solicitada."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden rechazar citas."
+        )
+
+    cita_id = request.POST.get("cita_id", "").strip()
+    if not cita_id:
+        return HttpResponseBadRequest("Falta el identificador de la cita.")
+
+    try:
+        cita = Cita.objects.get(id=cita_id)
+    except (Cita.DoesNotExist, ValueError):
+        return HttpResponseBadRequest("Cita no encontrada.")
+
+    cita.estado = "rechazada"
+    cita.save()
+
+    return redirect(f"/?vista=semana&fecha={cita.fecha.isoformat()}")

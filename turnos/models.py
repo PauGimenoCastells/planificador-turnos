@@ -1,6 +1,7 @@
 from datetime import date
 from typing import ClassVar
 
+from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -99,4 +100,55 @@ class ReubicacionClase(models.Model):
             f"Reubicación {self.uid_evento} "
             f"({self.fecha_original} {self.hora_inicio_original} -> "
             f"{self.nueva_fecha} {self.nueva_hora_inicio})"
+        )
+
+
+class Cita(models.Model):
+    """Reserva de cita de un compañero durante las franjas disponibles de Pau."""
+
+    ESTADOS: ClassVar[list[tuple[str, str]]] = [
+        ("solicitada", "Solicitada"),
+        ("confirmada", "Confirmada"),
+        ("rechazada", "Rechazada"),
+    ]
+
+    solicitante = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="citas",
+        verbose_name="Usuario solicitante",
+    )
+    fecha = models.DateField(
+        verbose_name="Fecha de la cita",
+    )
+    hora_inicio = models.TimeField(
+        verbose_name="Hora de inicio",
+    )
+    hora_fin = models.TimeField(
+        verbose_name="Hora de fin",
+    )
+    motivo = models.CharField(
+        max_length=250,
+        verbose_name="Motivo de la cita",
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS,
+        default="solicitada",
+        verbose_name="Estado de la cita",
+    )
+    creado_el = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+
+    class Meta:
+        verbose_name = "Cita"
+        verbose_name_plural = "Citas"
+        ordering: ClassVar[list[str]] = ["fecha", "hora_inicio"]
+
+    def __str__(self) -> str:
+        return (
+            f"Cita de {self.solicitante.username} "
+            f"({self.fecha} {self.hora_inicio}–{self.hora_fin}) [{self.estado}]"
         )
