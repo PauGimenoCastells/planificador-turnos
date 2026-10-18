@@ -1,9 +1,10 @@
-from django.contrib import admin
+from django.contrib.admin import site as admin_site
 from django.urls import path
 
-from planificador_turnos.views import home, login_view, logout_view
+from planificador_turnos.views import health_check_view, home, login_view, logout_view
 from turnos.views import (
     alternar_festivo_view,
+    calendario_semanal_view,
     cancelar_cita_view,
     configurar_calendario_uni,
     configurar_turnos,
@@ -18,8 +19,10 @@ from turnos.views import (
 )
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("admin/", admin_site.urls),
+    path("health/", health_check_view, name="health_check"),
     path("", home, name="home"),
+    path("turnos/semanal/", calendario_semanal_view, name="calendario_semanal"),
     path("login/", login_view, name="login"),
     path("logout/", logout_view, name="logout"),
     path("turnos/configurar/", configurar_turnos, name="configurar_turnos"),
@@ -41,3 +44,4 @@ urlpatterns = [
         name="guardar_actividades_bus",
     ),
 ]
+

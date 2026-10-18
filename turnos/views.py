@@ -661,3 +661,14 @@ def alternar_festivo_view(request):
     if referer:
         return redirect(referer)
     return redirect(f"/?vista=mes&fecha={fecha_val.isoformat()}")
+
+
+def calendario_semanal_view(request):
+    """Vista semanal horaria del calendario con métricas de autobús para Pau (R3)."""
+    from planificador_turnos.views import home
+
+    req_copy = request.GET.copy()
+    req_copy["vista"] = "semana"
+    request.GET = req_copy
+    return home(request)
+
