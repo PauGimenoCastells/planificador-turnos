@@ -1,3 +1,4 @@
+import calendar
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
@@ -63,6 +64,54 @@ HORARIOS_TURNOS = {
     },
 }
 
+FESTIVOS_OFICIALES_MARTORELL_2026: dict[date, str] = {
+    date(2026, 1, 1): "Año Nuevo",
+    date(2026, 1, 6): "Epifanía del Señor",
+    date(2026, 4, 3): "Viernes Santo",
+    date(2026, 4, 6): "Lunes de Pascua",
+    date(2026, 4, 27): "Festa del Sant Crist (Martorell)",
+    date(2026, 5, 1): "Fiesta del Trabajo",
+    date(2026, 5, 25): "Segona Pasqua (Martorell)",
+    date(2026, 6, 24): "Sant Joan",
+    date(2026, 8, 15): "Asunción de la Virgen",
+    date(2026, 9, 11): "Diada Nacional de Catalunya",
+    date(2026, 10, 12): "Fiesta Nacional de España",
+    date(2026, 12, 8): "Inmaculada Concepción",
+    date(2026, 12, 25): "Navidad",
+    date(2026, 12, 26): "Sant Esteve",
+}
+
+
+def consultar_festivo_dia(fecha: date) -> dict[str, Any] | None:
+    """
+    Determina si una fecha es festivo o parada de fábrica (R1, R3).
+    Cruza los registros de base de datos FestivoParada (que mandan sobre el catálogo)
+    con el catálogo canónico de 14 festivos oficiales de Martorell 2026.
+    """
+    try:
+        from turnos.models import FestivoParada
+
+        fp = FestivoParada.objects.filter(fecha=fecha).first()
+        if fp is not None:
+            return {
+                "es_festivo": fp.es_festivo,
+                "motivo": fp.motivo or ("Festivo oficial" if fp.es_oficial else "Parada de fábrica"),
+                "es_oficial": fp.es_oficial,
+                "modificado_manualmente": True,
+            }
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    if fecha in FESTIVOS_OFICIALES_MARTORELL_2026:
+        return {
+            "es_festivo": True,
+            "motivo": FESTIVOS_OFICIALES_MARTORELL_2026[fecha],
+            "es_oficial": True,
+            "modificado_manualmente": False,
+        }
+
+    return None
+
 
 def obtener_turno_dia(
     fecha: date,
@@ -70,7 +119,7 @@ def obtener_turno_dia(
     turno_inicial: str = "A",
     config: Any | None = None,
 ) -> dict[str, Any]:
-    """Calcula el turno correspondiente a una fecha segun el ciclo determinista de 21 dias."""
+    """Calcula el turno correspondiente a una fecha segun el ciclo determinista de 21 dias y festivos."""
     if config is not None:
         fecha_base = config.fecha_base
         turno_inicial = config.turno_inicial
@@ -86,6 +135,9 @@ def obtener_turno_dia(
         return {
             "fecha": fecha,
             "es_descanso": True,
+            "es_festivo": False,
+            "nombre_festivo": None,
+            "motivo": None,
             "codigo": None,
             "nombre": "Descanso",
             "color": "#94A3B8",
@@ -103,9 +155,32 @@ def obtener_turno_dia(
     codigo = ORDEN_ROTACION[idx_actual]
     horario = HORARIOS_TURNOS[codigo]
 
+    # Festivo o parada de fábrica (R1, R3, R4)
+    info_festivo = consultar_festivo_dia(fecha)
+    if info_festivo and info_festivo.get("es_festivo"):
+        motivo = info_festivo.get("motivo") or "Festivo / Parada"
+        return {
+            "fecha": fecha,
+            "es_descanso": False,
+            "es_festivo": True,
+            "es_oficial": info_festivo.get("es_oficial", False),
+            "nombre_festivo": motivo,
+            "motivo": motivo,
+            "codigo": codigo,
+            "nombre": motivo,
+            "color": "#8B5CF6",
+            "fabrica": None,
+            "bus_ida": None,
+            "bus_vuelta": None,
+            "franja_libre": "Día completo",
+        }
+
     return {
         "fecha": fecha,
         "es_descanso": False,
+        "es_festivo": False,
+        "nombre_festivo": None,
+        "motivo": None,
         "codigo": codigo,
         "nombre": horario["nombre"],
         "color": horario["color"],
@@ -821,6 +896,10 @@ def obtener_eventos_semana(
                 "mes": dia_fecha.strftime("%b"),
                 "es_hoy": dia_fecha == hoy,
                 "es_descanso": info_turno["es_descanso"],
+                "es_festivo": info_turno.get("es_festivo", False),
+                "nombre_festivo": info_turno.get("nombre_festivo") or "",
+                "motivo_festivo": info_turno.get("motivo") or "",
+                "es_oficial": info_turno.get("es_oficial", False),
                 "codigo_turno": info_turno["codigo"],
                 "nombre_turno": info_turno["nombre"],
                 "color_turno": info_turno["color"],
@@ -839,11 +918,19 @@ def obtener_eventos_semana(
 
 def obtener_semanas_calendario(
     fecha_referencia: date,
-    num_semanas: int = 4,
+    num_semanas: int | None = None,
     config: Any | None = None,
 ) -> list[list[dict[str, Any]]]:
-    """Genera una lista de semanas (lunes a domingo) con la informacion de turnos para cada dia."""
-    lunes_inicio = fecha_referencia - timedelta(days=fecha_referencia.weekday())
+    """Genera una lista de semanas (lunes a domingo) con la informacion de turnos para cada dia del mes."""
+    primer_dia_mes = date(fecha_referencia.year, fecha_referencia.month, 1)
+    lunes_inicio = primer_dia_mes - timedelta(days=primer_dia_mes.weekday())
+
+    if num_semanas is None:
+        ultimo_dia_num = calendar.monthrange(fecha_referencia.year, fecha_referencia.month)[1]
+        ultimo_dia_mes = date(fecha_referencia.year, fecha_referencia.month, ultimo_dia_num)
+        dias_totales = (ultimo_dia_mes - lunes_inicio).days + 1
+        num_semanas = max(4, (dias_totales + 6) // 7)
+
     semanas = []
     hoy = date.today()
 
@@ -871,6 +958,7 @@ def obtener_semanas_calendario(
             info["es_hoy"] = dia == hoy
             info["numero_dia"] = dia.day
             info["mes"] = dia.strftime("%b")
+            info["mismo_mes"] = dia.month == fecha_referencia.month
             citas_dia = citas_por_dia.get(dia, [])
             info["citas"] = citas_dia
             info["total_citas"] = len(citas_dia)

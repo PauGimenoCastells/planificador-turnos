@@ -355,7 +355,11 @@
                             </span>
                         </div>
                         <div class="mt-1">
-                            {% if dia.es_descanso %}
+                            {% if dia.es_festivo %}
+                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300" title="{{ dia.nombre_festivo }}">
+                                🎉 {{ dia.nombre_festivo|truncatechars:15 }}
+                            </span>
+                            {% elif dia.es_descanso %}
                             <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-600">
                                 Descanso
                             </span>

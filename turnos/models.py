@@ -214,3 +214,42 @@ class ActividadAutobus(models.Model):
 
     def __str__(self) -> str:
         return f"Actividades {self.tipo_bus} ({self.fecha}): {', '.join(self.actividades)}"
+
+
+class FestivoParada(models.Model):
+    """Registro de días festivos oficiales y paradas técnicas o vacaciones de fábrica."""
+
+    fecha = models.DateField(
+        unique=True,
+        verbose_name="Fecha",
+    )
+    es_festivo = models.BooleanField(
+        default=True,
+        verbose_name="Es festivo o parada",
+    )
+    motivo = models.CharField(
+        max_length=150,
+        blank=True,
+        verbose_name="Motivo o descripción",
+    )
+    es_oficial = models.BooleanField(
+        default=False,
+        verbose_name="Es festivo oficial",
+    )
+    creado_el = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+    actualizado_el = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Última actualización",
+    )
+
+    class Meta:
+        verbose_name = "Festivo o parada de fábrica"
+        verbose_name_plural = "Festivos y paradas de fábrica"
+
+    def __str__(self) -> str:
+        estado = "Festivo" if self.es_festivo else "Laborable (revertido)"
+        motivo_str = f" - {self.motivo}" if self.motivo else ""
+        return f"{self.fecha}: {estado}{motivo_str}"

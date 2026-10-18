@@ -70,7 +70,7 @@ def home(request):
         domingo_semana = lunes_semana + timedelta(days=6)
 
         # Semanas de vista mensual
-        semanas_mes = obtener_semanas_calendario(fecha_referencia, num_semanas=4, config=config)
+        semanas_mes = obtener_semanas_calendario(fecha_referencia, config=config)
 
         # Días y bloques de vista semanal horaria
         dias_semana_horaria = obtener_eventos_semana(
