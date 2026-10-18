@@ -91,6 +91,28 @@ def home(request):
             except Exception:  # noqa: BLE001
                 citas_pendientes = []
 
+        # Contraofertas pendientes de respuesta para el usuario solicitante (R4)
+        mis_contraofertas = []
+        if request.user.is_authenticated:
+            try:
+                from turnos.models import Cita
+
+                mis_contraofertas = list(
+                    Cita.objects.filter(solicitante=request.user, estado="contraoferta").order_by(
+                        "fecha", "hora_inicio"
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                mis_contraofertas = []
+
+        # Leyenda de usuarios y colores asignados (R1)
+        leyenda_usuarios = [
+            {"nombre": "Pol", "usuario": "pol", "color": "#10B981"},
+            {"nombre": "Manolo", "usuario": "manolo", "color": "#F59E0B"},
+            {"nombre": "Paco", "usuario": "paco", "color": "#8B5CF6"},
+            {"nombre": "Random", "usuario": "random", "color": "#EC4899"},
+        ]
+
         # Horas del eje vertical (00:00 a 23:00)
         horas_dia = [f"{h:02d}:00" for h in range(24)]
 
@@ -152,6 +174,8 @@ def home(request):
                 "semanas_mini": semanas_mini,
                 "horarios_turnos": HORARIOS_TURNOS,
                 "citas_pendientes": citas_pendientes,
+                "mis_contraofertas": mis_contraofertas,
+                "leyenda_usuarios": leyenda_usuarios,
             }
         )
 

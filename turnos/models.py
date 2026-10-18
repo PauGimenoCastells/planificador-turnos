@@ -109,6 +109,8 @@ class Cita(models.Model):
     ESTADOS: ClassVar[list[tuple[str, str]]] = [
         ("solicitada", "Solicitada"),
         ("confirmada", "Confirmada"),
+        ("contraoferta", "Contraoferta"),
+        ("cancelada", "Cancelada"),
         ("rechazada", "Rechazada"),
         ("caducada", "Caducada"),
     ]
@@ -137,6 +139,27 @@ class Cita(models.Model):
         choices=ESTADOS,
         default="solicitada",
         verbose_name="Estado de la cita",
+    )
+    fecha_propuesta = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha propuesta (contraoferta)",
+    )
+    hora_inicio_propuesta = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="Hora de inicio propuesta",
+    )
+    hora_fin_propuesta = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="Hora de fin propuesta",
+    )
+    mensaje_contraoferta = models.CharField(
+        max_length=250,
+        blank=True,
+        default="",
+        verbose_name="Mensaje de contraoferta",
     )
     creado_el = models.DateTimeField(
         auto_now_add=True,

@@ -650,6 +650,25 @@ def obtener_eventos_semana(
                         f"Solapa con {clase.get('titulo', 'Clase')} ({clase['hora_inicio_str']}–{clase['hora_fin_str']})"
                     )
 
+            # R6: Si no solapa con fábrica/bus, pero cae fuera de la franja disponible base del turno de Pau
+            if not clase["tiene_solapamiento"]:
+                if dia_fecha.weekday() in (5, 6):
+                    base_ini, base_fin = 480, 1320  # 08:00 - 22:00
+                elif info_turno["codigo"] == "A":
+                    base_ini, base_fin = 935, 1185  # 15:35 - 19:45
+                elif info_turno["codigo"] == "B":
+                    base_ini, base_fin = 480, 750  # 08:00 - 12:30
+                elif info_turno["codigo"] == "C":
+                    base_ini, base_fin = 930, 1215  # 15:30 - 20:15
+                else:
+                    base_ini, base_fin = 0, 0
+
+                if not (c_ini >= base_ini and c_fin <= base_fin):
+                    clase["tiene_solapamiento"] = True
+                    clase["motivo_solapamiento"] = (
+                        "Conflicto: fuera de franja de disponibilidad (descanso de turno)"
+                    )
+
         # Privacidad para solicitantes (R5): fábrica, buses y clases se muestran como 'No disponible'
         if not es_gestor:
             for b in bloques_turno:
@@ -668,7 +687,7 @@ def obtener_eventos_semana(
 
             citas_qs = (
                 Cita.objects.filter(fecha=dia_fecha)
-                .exclude(estado__in=["rechazada", "caducada"])
+                .exclude(estado__in=["rechazada", "caducada", "cancelada"])
                 .select_related("solicitante")
             )
             for cita in citas_qs:
@@ -678,8 +697,8 @@ def obtener_eventos_semana(
                     else False
                 )
 
-                # Si es solicitada y no es propia ni es gestor, no se dibuja a terceros
-                if cita.estado == "solicitada" and not (es_propia or es_gestor):
+                # Si es solicitada o contraoferta y no es propia ni es gestor, no se dibuja a terceros
+                if cita.estado in ("solicitada", "contraoferta") and not (es_propia or es_gestor):
                     continue
 
                 c_ini = cita.hora_inicio.hour * 60 + cita.hora_inicio.minute
@@ -698,6 +717,21 @@ def obtener_eventos_semana(
                         "motivo": cita.motivo if mostrar_motivo else "",
                         "mostrar_motivo": mostrar_motivo,
                         "estado": cita.estado,
+                        "fecha_propuesta": cita.fecha_propuesta,
+                        "hora_inicio_propuesta_str": (
+                            cita.hora_inicio_propuesta.strftime("%H:%M")
+                            if cita.hora_inicio_propuesta
+                            else ""
+                        ),
+                        "hora_fin_propuesta_str": (
+                            cita.hora_fin_propuesta.strftime("%H:%M")
+                            if cita.hora_fin_propuesta
+                            else ""
+                        ),
+                        "mensaje_contraoferta": (
+                            cita.mensaje_contraoferta if mostrar_motivo else ""
+                        ),
+                        "es_propia": es_propia,
                         "hora_inicio_str": cita.hora_inicio.strftime("%H:%M"),
                         "hora_fin_str": cita.hora_fin.strftime("%H:%M"),
                         "minuto_inicio": c_ini,
