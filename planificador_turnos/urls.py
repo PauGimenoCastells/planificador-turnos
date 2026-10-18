@@ -3,6 +3,7 @@ from django.urls import path
 
 from planificador_turnos.views import home, login_view, logout_view
 from turnos.views import (
+    alternar_festivo_view,
     cancelar_cita_view,
     configurar_calendario_uni,
     configurar_turnos,
@@ -23,6 +24,7 @@ urlpatterns = [
     path("logout/", logout_view, name="logout"),
     path("turnos/configurar/", configurar_turnos, name="configurar_turnos"),
     path("turnos/calendario-uni/", configurar_calendario_uni, name="configurar_calendario_uni"),
+    path("turnos/alternar-festivo/", alternar_festivo_view, name="alternar_festivo"),
     path("turnos/reubicar-clase/", reubicar_clase_view, name="reubicar_clase"),
     path("turnos/restablecer-clase/", restablecer_clase_view, name="restablecer_clase"),
     path("turnos/solicitar-cita/", solicitar_cita_view, name="solicitar_cita"),
