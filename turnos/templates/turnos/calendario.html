@@ -98,11 +98,19 @@
                         <span class="text-sm font-bold text-slate-800">
                             {{ dia.numero_dia }} <span class="text-xs font-normal text-slate-500">{{ dia.mes }}</span>
                         </span>
-                        {% if dia.es_hoy %}
-                        <span class="px-1.5 py-0.5 bg-[#00CCFF] text-slate-950 text-[10px] font-black rounded uppercase">
-                            Hoy
-                        </span>
-                        {% endif %}
+                        <div class="flex items-center gap-1">
+                            {% if dia.total_citas %}
+                            <a href="?vista=semana&fecha={{ dia.fecha|date:'Y-m-d' }}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition shadow-xs" title="Ver {{ dia.total_citas }} cita(s) en la vista semanal">
+                                <span>📅</span>
+                                <span>{{ dia.total_citas }} cita{{ dia.total_citas|pluralize }}</span>
+                            </a>
+                            {% endif %}
+                            {% if dia.es_hoy %}
+                            <span class="px-1.5 py-0.5 bg-[#00CCFF] text-slate-950 text-[10px] font-black rounded uppercase">
+                                Hoy
+                            </span>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <!-- Contenido del turno -->

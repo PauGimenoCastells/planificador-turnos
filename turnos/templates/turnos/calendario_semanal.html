@@ -315,14 +315,14 @@
                         {% for bloque in dia.bloques %}
                         {% if bloque.tipo == 'cita' %}
                         <div
-                            class="cita-bloque absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden z-15 left-1 right-1 border-2
+                            class="cita-bloque absolute rounded-lg p-2 transition-all shadow-sm overflow-hidden z-15 border-2
                                 {% if bloque.estado == 'solicitada' %}
                                     border-dashed
                                 {% else %}
                                     border-solid shadow-md
                                 {% endif %}
                             "
-                            style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px; border-color: {{ bloque.color_solicitante }}; {% if bloque.estado == 'solicitada' %}background-color: {{ bloque.color_solicitante }}33; color: #0f172a;{% else %}background-color: {{ bloque.color_solicitante }}; color: #ffffff;{% endif %}"
+                            style="top: {{ bloque.top_px }}px; height: {{ bloque.height_px }}px; border-color: {{ bloque.color_solicitante }}; {% if bloque.posicion_css %}{{ bloque.posicion_css }}{% else %}left: 4px; right: 4px;{% endif %} {% if bloque.estado == 'solicitada' %}background-color: {{ bloque.color_solicitante }}33; color: #0f172a;{% else %}background-color: {{ bloque.color_solicitante }}; color: #ffffff;{% endif %}"
                             title="Cita de {{ bloque.solicitante }} ({{ bloque.hora_inicio_str }} - {{ bloque.hora_fin_str }}) - Estado: {{ bloque.estado|capfirst }}"
                         >
                             <div class="flex items-center justify-between gap-1 mb-0.5">

@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotAllowed
@@ -8,6 +8,25 @@ from django.utils import timezone
 from turnos.ical import descargar_feed_ical
 from turnos.models import Cita, ConfiguracionTurno, ReubicacionClase
 from turnos.rotacion import obtener_franjas_disponibles_semana
+
+
+def purgar_o_caducar_citas_vencidas() -> int:
+    """
+    Caduca automáticamente las solicitudes de cita que no hayan sido confirmadas
+    12 horas antes del inicio programado de la cita.
+    """
+    ahora = timezone.now()
+    caducadas_count = 0
+    citas_solicitadas = Cita.objects.filter(estado="solicitada")
+    for cita in citas_solicitadas:
+        inicio_dt = datetime.combine(cita.fecha, cita.hora_inicio)
+        if timezone.is_naive(inicio_dt):
+            inicio_dt = timezone.make_aware(inicio_dt, timezone.get_current_timezone())
+        if ahora >= inicio_dt - timedelta(hours=12):
+            cita.estado = "caducada"
+            cita.save(update_fields=["estado"])
+            caducadas_count += 1
+    return caducadas_count
 
 
 def usuario_puede_gestionar(user) -> bool:
@@ -211,6 +230,20 @@ def solicitar_cita_view(request):
     if hora_fin <= hora_inicio:
         return HttpResponseBadRequest(
             "La hora de fin debe ser estrictamente posterior a la hora de inicio."
+        )
+
+    # Validar que no sea en el pasado y con al menos 24 horas de antelación
+    ahora = timezone.now()
+    inicio_dt = datetime.combine(fecha, hora_inicio)
+    if timezone.is_naive(inicio_dt):
+        inicio_dt = timezone.make_aware(inicio_dt, timezone.get_current_timezone())
+
+    if inicio_dt <= ahora:
+        return HttpResponseBadRequest("No se pueden solicitar citas en el pasado.")
+
+    if inicio_dt < ahora + timedelta(hours=24):
+        return HttpResponseBadRequest(
+            "Solo se pueden solicitar citas con un mínimo de 24 horas de antelación."
         )
 
     # Validar que la cita cae dentro de una franja disponible de Pau
