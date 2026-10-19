@@ -974,16 +974,19 @@ def calcular_metricas_autobus(
                         duracion = min_fin - min_ini
                     else:
                         duracion = 0
-                    if duracion > 0:
+                    acts_validas = [act for act in acts if act in desglose]
+                    if duracion > 0 and acts_validas:
                         total_minutos += duracion
                         total_trayectos += 1
-                        for act in acts:
-                            if act in desglose:
-                                desglose[act]["minutos"] += duracion
-                                desglose[act]["contador"] += 1
+                        min_por_actividad = duracion / len(acts_validas)
+                        for act in acts_validas:
+                            desglose[act]["minutos"] += min_por_actividad
+                            desglose[act]["contador"] += 1
 
     for cod in codigos_actividades:
-        desglose[cod]["tiempo_formateado"] = formatear_duracion(desglose[cod]["minutos"])
+        minutos_redondeados = round(desglose[cod]["minutos"])
+        desglose[cod]["minutos"] = minutos_redondeados
+        desglose[cod]["tiempo_formateado"] = formatear_duracion(minutos_redondeados)
 
     return {
         "total_minutos": total_minutos,

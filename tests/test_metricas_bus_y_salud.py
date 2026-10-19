@@ -124,26 +124,69 @@ def test_r2_computo_metricas_autobus_portante(datos_test):
     assert metricas["total_formateado"] == "3h"
     assert metricas["total_trayectos"] == 3
 
-    # Desglose por actividad:
-    # lectura: 45 (ida) + 90 (vuelta) = 135 min -> 2h 15m
-    assert metricas["por_actividad"]["lectura"]["minutos"] == 135
-    assert metricas["por_actividad"]["lectura"]["tiempo_formateado"] == "2h 15m"
-
-    # siesta: 45 min -> 45m
-    assert metricas["por_actividad"]["siesta"]["minutos"] == 45
-    assert metricas["por_actividad"]["siesta"]["tiempo_formateado"] == "45m"
-
-    # reflexion: 90 min -> 1h 30m
-    assert metricas["por_actividad"]["reflexion"]["minutos"] == 90
-    assert metricas["por_actividad"]["reflexion"]["tiempo_formateado"] == "1h 30m"
-
+    # Desglose por actividad con reparto equitativo (P-20261019-f95ab3e6):
+    # Lunes bus_ida (45m entre lectura y siesta) -> 22.5m cada una
+    # Lunes bus_vuelta (90m entre lectura y reflexion) -> 45m cada una
+    # Martes bus_ida (45m con videojuegos) -> 45m
+    # lectura: 22.5 + 45 = 67.5 min -> 68m (1h 8m)
+    # siesta: 22.5 min -> 22m o 23m
+    # reflexion: 45 min -> 45m
     # videojuegos: 45 min -> 45m
+    # videos: 0 min -> 0m
+    assert metricas["por_actividad"]["lectura"]["minutos"] == 68
+    assert metricas["por_actividad"]["lectura"]["tiempo_formateado"] == "1h 8m"
+
+    assert metricas["por_actividad"]["siesta"]["minutos"] in (22, 23)
+    assert metricas["por_actividad"]["siesta"]["tiempo_formateado"] in ("22m", "23m")
+
+    assert metricas["por_actividad"]["reflexion"]["minutos"] == 45
+    assert metricas["por_actividad"]["reflexion"]["tiempo_formateado"] == "45m"
+
     assert metricas["por_actividad"]["videojuegos"]["minutos"] == 45
     assert metricas["por_actividad"]["videojuegos"]["tiempo_formateado"] == "45m"
 
-    # videos: 0 min -> 0m
     assert metricas["por_actividad"]["videos"]["minutos"] == 0
     assert metricas["por_actividad"]["videos"]["tiempo_formateado"] == "0m"
+
+
+@pytest.mark.django_db
+def test_reparto_equitativo_tiempo_actividades_bus(datos_test):
+    """Verifica que si un trayecto tiene N actividades, la duración del trayecto se divide entre N."""
+    from turnos.rotacion import calcular_metricas_autobus
+
+    bloques_dia = [
+        {
+            "fecha": date(2026, 10, 19),
+            "bloques": [
+                {
+                    "tipo": "bus_ida",
+                    "minuto_inicio": 360,
+                    "minuto_fin": 420,  # 60 minutos
+                    "actividades": ["lectura", "reflexion"],
+                },
+                {
+                    "tipo": "bus_vuelta",
+                    "minuto_inicio": 800,
+                    "minuto_fin": 860,  # 60 minutos
+                    "actividades": ["siesta", "videojuegos", "videos"],
+                },
+            ],
+        }
+    ]
+
+    metricas = calcular_metricas_autobus(bloques_dia)
+    assert metricas["total_minutos"] == 120
+    assert metricas["por_actividad"]["lectura"]["minutos"] == 30
+    assert metricas["por_actividad"]["lectura"]["tiempo_formateado"] == "30m"
+    assert metricas["por_actividad"]["reflexion"]["minutos"] == 30
+    assert metricas["por_actividad"]["reflexion"]["tiempo_formateado"] == "30m"
+
+    assert metricas["por_actividad"]["siesta"]["minutos"] == 20
+    assert metricas["por_actividad"]["siesta"]["tiempo_formateado"] == "20m"
+    assert metricas["por_actividad"]["videojuegos"]["minutos"] == 20
+    assert metricas["por_actividad"]["videojuegos"]["tiempo_formateado"] == "20m"
+    assert metricas["por_actividad"]["videos"]["minutos"] == 20
+    assert metricas["por_actividad"]["videos"]["tiempo_formateado"] == "20m"
 
 
 # ==============================================================================
