@@ -157,6 +157,17 @@ def home(request):
         else:
             mini_next_fecha = date(mini_ano, mini_mes + 1, 1).isoformat()
 
+        excepcion_turno_semana = None
+        if puede_gestionar:
+            try:
+                from turnos.models import ExcepcionTurnoSemana
+
+                exc = ExcepcionTurnoSemana.objects.filter(lunes_semana=lunes_semana).first()
+                if exc:
+                    excepcion_turno_semana = exc.turno
+            except Exception:  # noqa: BLE001, S110
+                pass
+
         context.update(
             {
                 "config": config,
@@ -172,6 +183,7 @@ def home(request):
                 "fecha_hoy": fecha_hoy,
                 "fecha_hoy_iso": fecha_hoy.isoformat(),
                 "lunes_semana": lunes_semana,
+                "excepcion_turno_semana": excepcion_turno_semana,
                 "domingo_semana": domingo_semana,
                 "fecha_semana_anterior": (lunes_semana - timedelta(days=7)).isoformat(),
                 "fecha_semana_siguiente": (lunes_semana + timedelta(days=7)).isoformat(),
