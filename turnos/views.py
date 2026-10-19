@@ -15,6 +15,7 @@ from turnos.models import (
     ActividadAutobus,
     Cita,
     ConfiguracionTurno,
+    ExcepcionTurnoSemana,
     FestivoParada,
     ReubicacionClase,
 )
@@ -411,6 +412,17 @@ def contraofertar_cita_view(request):
             "La hora de fin debe ser estrictamente posterior a la hora de inicio."
         )
 
+    # Validar antelación mínima de 12 horas (R5)
+    ahora = timezone.now()
+    propuesta_dt = datetime.combine(nueva_fecha, nueva_hora_ini)
+    if timezone.is_naive(propuesta_dt):
+        propuesta_dt = timezone.make_aware(propuesta_dt, timezone.get_current_timezone())
+
+    if ahora <= propuesta_dt < ahora + timedelta(hours=12):
+        return HttpResponseBadRequest(
+            "La contraoferta debe realizarse con al menos 12 horas de antelación respecto a la hora propuesta."
+        )
+
     # Validar que la contraoferta cae dentro de una franja disponible de Pau (R5)
     franjas_sem = obtener_franjas_disponibles_semana(nueva_fecha)
     franjas_dia = franjas_sem.get(nueva_fecha, [])
@@ -423,17 +435,6 @@ def contraofertar_cita_view(request):
     if not cae_en_disponible:
         return HttpResponseBadRequest(
             "La propuesta no cae dentro de una franja disponible de Pau para ese día."
-        )
-
-    # Validar antelación mínima de 12 horas (R5)
-    ahora = timezone.now()
-    propuesta_dt = datetime.combine(nueva_fecha, nueva_hora_ini)
-    if timezone.is_naive(propuesta_dt):
-        propuesta_dt = timezone.make_aware(propuesta_dt, timezone.get_current_timezone())
-
-    if ahora <= propuesta_dt < ahora + timedelta(hours=12):
-        return HttpResponseBadRequest(
-            "La contraoferta debe realizarse con al menos 12 horas de antelación respecto a la hora propuesta."
         )
 
     try:
@@ -591,8 +592,8 @@ def alternar_festivo_view(request):
 
     es_oficial = fecha_val in FESTIVOS_OFICIALES_MARTORELL_2026
 
-    if accion == "revertir_laborable":
-        # Guardar registro explícito con es_festivo=False para anular festivo oficial o parada previa
+    if accion in ("revertir_laborable", "marcar_laborable"):
+        # Guardar registro explícito con es_festivo=False para forzar día laborable (incluso en fin de semana o festivo oficial)
         fp, _ = FestivoParada.objects.update_or_create(
             fecha=fecha_val,
             defaults={
@@ -601,7 +602,7 @@ def alternar_festivo_view(request):
                 "es_oficial": es_oficial,
             },
         )
-    elif accion == "marcar_festivo":
+    elif accion in ("marcar_festivo", "marcar_parada"):
         motivo_final = (
             motivo
             or FESTIVOS_OFICIALES_MARTORELL_2026.get(fecha_val)
@@ -618,7 +619,9 @@ def alternar_festivo_view(request):
     else:
         # Alternancia automática según estado actual
         actual = consultar_festivo_dia(fecha_val)
-        if actual and actual.get("es_festivo"):
+        if (actual and actual.get("es_festivo")) or (
+            fecha_val.weekday() in (5, 6) and (not actual or actual.get("es_festivo"))
+        ):
             fp, _ = FestivoParada.objects.update_or_create(
                 fecha=fecha_val,
                 defaults={
@@ -661,6 +664,62 @@ def alternar_festivo_view(request):
     if referer:
         return redirect(referer)
     return redirect(f"/?vista=mes&fecha={fecha_val.isoformat()}")
+
+
+@login_required(login_url="login")
+def cambiar_turno_semana_view(request):
+    """
+    Permite a Pau o superusuarios cambiar masivamente el turno de una semana completa desde el lunes (R2),
+    o restablecer la rotación automática si se selecciona 'restablecer'.
+    """
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden modificar el turno semanal."
+        )
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    lunes_str = request.POST.get("lunes_semana", "").strip()
+    if not lunes_str:
+        return HttpResponseBadRequest("Falta el parámetro lunes_semana.")
+
+    try:
+        lunes_val = date.fromisoformat(lunes_str)
+    except ValueError:
+        return HttpResponseBadRequest("Formato de fecha inválido. Use YYYY-MM-DD.")
+
+    # Asegurar que la fecha corresponde al lunes de esa semana
+    lunes_val = lunes_val - timedelta(days=lunes_val.weekday())
+
+    turno = request.POST.get("turno", "").strip().upper()
+
+    if turno in ("A", "B", "C"):
+        ExcepcionTurnoSemana.objects.update_or_create(
+            lunes_semana=lunes_val,
+            defaults={"turno": turno},
+        )
+    elif turno in ("", "RESTABLECER", "AUTO"):
+        ExcepcionTurnoSemana.objects.filter(lunes_semana=lunes_val).delete()
+    else:
+        return HttpResponseBadRequest("Turno no válido. Debe ser A, B, C o restablecer.")
+
+    if (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or "application/json" in request.headers.get("Accept", "")
+    ):
+        return JsonResponse(
+            {
+                "status": "ok",
+                "lunes_semana": str(lunes_val),
+                "turno": turno if turno in ("A", "B", "C") else "auto",
+            }
+        )
+
+    referer = request.META.get("HTTP_REFERER")
+    if referer:
+        return redirect(referer)
+    return redirect(f"/?vista=mes&fecha={lunes_val.isoformat()}")
 
 
 def calendario_semanal_view(request):

@@ -253,3 +253,40 @@ class FestivoParada(models.Model):
         estado = "Festivo" if self.es_festivo else "Laborable (revertido)"
         motivo_str = f" - {self.motivo}" if self.motivo else ""
         return f"{self.fecha}: {estado}{motivo_str}"
+
+
+class ExcepcionTurnoSemana(models.Model):
+    """Anulación puntual del turno asignado a toda una semana a partir de su lunes."""
+
+    OPCIONES_TURNO: ClassVar[list[tuple[str, str]]] = [
+        ("A", "Turno A (Mañana)"),
+        ("B", "Turno B (Tarde)"),
+        ("C", "Turno C (Noche)"),
+    ]
+
+    lunes_semana = models.DateField(
+        unique=True,
+        verbose_name="Lunes de la semana",
+        help_text="Fecha del lunes que identifica la semana completa",
+    )
+    turno = models.CharField(
+        max_length=1,
+        choices=OPCIONES_TURNO,
+        verbose_name="Turno semanal asignado",
+    )
+    creado_el = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+    actualizado_el = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Última actualización",
+    )
+
+    class Meta:
+        verbose_name = "Excepción de turno semanal"
+        verbose_name_plural = "Excepciones de turno semanal"
+
+    def __str__(self) -> str:
+        return f"Semana {self.lunes_semana}: Turno {self.turno}"
+

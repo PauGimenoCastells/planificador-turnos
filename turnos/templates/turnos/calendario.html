@@ -101,9 +101,21 @@
                 ">
                     <!-- Cabecera del dia -->
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-bold text-slate-800">
-                            {{ dia.numero_dia }} <span class="text-xs font-normal text-slate-500">{{ dia.mes }}</span>
-                        </span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm font-bold text-slate-800">
+                                {{ dia.numero_dia }} <span class="text-xs font-normal text-slate-500">{{ dia.mes }}</span>
+                            </span>
+                            {% if dia.es_lunes and puede_gestionar %}
+                            <button type="button"
+                                    onclick="event.stopPropagation(); abrirModalTurnoSemana('{{ dia.lunes_semana|date:'Y-m-d' }}', '{{ dia.excepcion_turno_semana|default:'' }}')"
+                                    data-semana-trigger="true"
+                                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold {% if dia.excepcion_turno_semana %}bg-indigo-100 text-indigo-900 border border-indigo-300{% else %}bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300{% endif %} transition shadow-xs cursor-pointer"
+                                    title="Pulsar para cambiar el turno de toda la semana">
+                                <span>🔄</span>
+                                <span>{% if dia.excepcion_turno_semana %}Semana {{ dia.excepcion_turno_semana }}{% else %}Semana{% endif %}</span>
+                            </button>
+                            {% endif %}
+                        </div>
                         <div class="flex items-center gap-1">
                             {% if dia.total_citas %}
                             <a href="?vista=semana&fecha={{ dia.fecha|date:'Y-m-d' }}" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200 transition shadow-xs" title="Ver {{ dia.total_citas }} cita(s) en la vista semanal">
@@ -111,7 +123,11 @@
                                 <span>{{ dia.total_citas }} cita{{ dia.total_citas|pluralize }}</span>
                             </a>
                             {% endif %}
-                            {% if dia.es_festivo %}
+                            {% if dia.es_laborable_forzado %}
+                            <span class="px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] font-bold rounded uppercase tracking-wider" title="Fin de semana forzado a laborable">
+                                Laborable
+                            </span>
+                            {% elif dia.es_festivo %}
                             <span class="px-1.5 py-0.5 bg-purple-600 text-white text-[9px] font-bold rounded uppercase tracking-wider" title="Festivo o parada de fábrica">
                                 {% if dia.es_oficial %}Festivo{% else %}Parada{% endif %}
                             </span>
@@ -127,7 +143,7 @@
                     <!-- Contenido del turno / festivo -->
                     {% if dia.es_festivo %}
                     <div class="my-auto text-center py-2 {% if puede_gestionar %}cursor-pointer hover:bg-purple-100/60 p-1 rounded-lg transition-all{% endif %}"
-                         {% if puede_gestionar %}onclick="abrirModalFestivo('{{ dia.fecha|date:'Y-m-d' }}', true, '{{ dia.nombre_festivo|escapejs }}', {% if dia.es_oficial %}true{% else %}false{% endif %})" data-festivo-trigger="true" title="Pulsar para gestionar festivo o parada"{% endif %}>
+                         {% if puede_gestionar %}onclick="abrirModalFestivo('{{ dia.fecha|date:'Y-m-d' }}', true, '{{ dia.nombre_festivo|escapejs }}', {% if dia.es_oficial %}true{% else %}false{% endif %}, false, false)" data-festivo-trigger="true" title="Pulsar para gestionar festivo o parada"{% endif %}>
                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-900 border border-purple-300 shadow-xs">
                             <span>🎉</span>
                             <span>{{ dia.nombre_festivo }}</span>
@@ -139,18 +155,18 @@
                     </div>
                     {% elif dia.es_descanso %}
                     <div class="my-auto text-center py-2 {% if puede_gestionar %}cursor-pointer hover:bg-slate-100/80 p-1 rounded-lg transition-all{% endif %}"
-                         {% if puede_gestionar %}onclick="abrirModalFestivo('{{ dia.fecha|date:'Y-m-d' }}', false, '', false)" data-festivo-trigger="true" title="Pulsar para marcar festivo o parada"{% endif %}>
+                         {% if puede_gestionar %}onclick="abrirModalFestivo('{{ dia.fecha|date:'Y-m-d' }}', false, '', false, true, false)" data-festivo-trigger="true" title="Pulsar para marcar festivo o laborable"{% endif %}>
                         <span class="inline-block px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs font-semibold">
                             Descanso
                         </span>
                         <p class="text-[10px] text-slate-400 mt-1">Sin fábrica</p>
                         {% if puede_gestionar %}
-                        <span class="text-[9px] text-slate-400 underline block mt-0.5">Añadir parada</span>
+                        <span class="text-[9px] text-emerald-600 font-bold underline block mt-0.5">Marcar laborable</span>
                         {% endif %}
                     </div>
                     {% else %}
                     <div class="flex-1 flex flex-col justify-center {% if puede_gestionar %}cursor-pointer hover:bg-white/70 p-1 rounded-lg transition-all{% endif %}"
-                         {% if puede_gestionar %}onclick="abrirModalFestivo('{{ dia.fecha|date:'Y-m-d' }}', false, '', false)" data-festivo-trigger="true" title="Pulsar en el centro para marcar como festivo o parada"{% endif %}>
+                         {% if puede_gestionar %}onclick="abrirModalFestivo('{{ dia.fecha|date:'Y-m-d' }}', false, '{{ dia.motivo|default:''|escapejs }}', false, false, {% if dia.es_laborable_forzado %}true{% else %}false{% endif %})" data-festivo-trigger="true" title="Pulsar para alternar festivo/parada o descanso"{% endif %}>
                         <div class="mb-1.5 flex items-center justify-between">
                             <span class="inline-block px-2 py-0.5 rounded text-xs font-bold
                                 {% if dia.codigo == 'A' %}bg-cyan-100 text-cyan-900 border border-[#00CCFF]/50
@@ -247,8 +263,90 @@
     </div>
 </div>
 
+<!-- MODAL INTERACTIVO DE CAMBIO DE TURNO SEMANAL COMPLETO (R2) -->
+<div id="modal-turno-semana" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden transition-opacity">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md mx-4 p-6 overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🔄</span>
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">
+                        Cambiar turno de la semana completa
+                    </h3>
+                    <p class="text-xs text-slate-500" id="modal-turno-fecha-texto">Semana seleccionada</p>
+                </div>
+            </div>
+            <button type="button" onclick="cerrarModalTurnoSemana()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition">
+                <span class="text-xl font-bold">&times;</span>
+            </button>
+        </div>
+
+        <form id="form-modal-turno-semana" method="POST" action="/turnos/cambiar-turno-semana/" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="lunes_semana" id="modal-turno-input-lunes" value="">
+
+            <p class="text-xs text-slate-600">
+                Selecciona el turno que Pau realizará durante los días laborables de esta semana, o restablece la rotación tri-semanal ordinaria:
+            </p>
+
+            <div class="space-y-2">
+                <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-cyan-50/50 cursor-pointer transition">
+                    <input type="radio" name="turno" value="A" id="turno_opcion_a" class="text-cyan-600 focus:ring-[#00CCFF]">
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-900">Turno A (Mañana)</span>
+                            <span class="text-[11px] font-mono font-bold text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded">05:45 – 14:15</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Bus ida 04:55 &rarr; Vuelta 14:35</p>
+                    </div>
+                </label>
+
+                <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-purple-50/50 cursor-pointer transition">
+                    <input type="radio" name="turno" value="C" id="turno_opcion_c" class="text-purple-600 focus:ring-purple-500">
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-900">Turno C (Tarde)</span>
+                            <span class="text-[11px] font-mono font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded">13:45 – 22:15</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Bus ida 12:45 &rarr; Vuelta 22:30</p>
+                    </div>
+                </label>
+
+                <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-amber-50/50 cursor-pointer transition">
+                    <input type="radio" name="turno" value="B" id="turno_opcion_b" class="text-amber-600 focus:ring-amber-500">
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-900">Turno B (Noche)</span>
+                            <span class="text-[11px] font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">21:45 – 06:15</span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Bus ida 20:45 &rarr; Vuelta 06:30</p>
+                    </div>
+                </label>
+
+                <label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                    <input type="radio" name="turno" value="RESTABLECER" id="turno_opcion_auto" class="text-slate-600 focus:ring-slate-500">
+                    <div class="flex-1">
+                        <span class="text-xs font-bold text-slate-700">Restablecer rotación automática</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Vuelve al ciclo habitual calculado de 21 días</p>
+                    </div>
+                </label>
+            </div>
+
+            <!-- Botones de acción -->
+            <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button type="button" onclick="cerrarModalTurnoSemana()" class="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition">
+                    Cancelar
+                </button>
+                <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-[#00CCFF] hover:bg-[#00CCFF]/90 rounded-lg shadow-sm transition">
+                    Guardar turno semana
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
-function abrirModalFestivo(fechaStr, esFestivo, motivo, esOficial) {
+function abrirModalFestivo(fechaStr, esFestivo, motivo, esOficial, esDescanso, esLaborableForzado) {
     const modal = document.getElementById('modal-festivo-dia');
     if (!modal) return;
     document.getElementById('modal-festivo-input-fecha').value = fechaStr;
@@ -261,14 +359,30 @@ function abrirModalFestivo(fechaStr, esFestivo, motivo, esOficial) {
     const btnSubmit = document.getElementById('modal-festivo-btn-submit');
     const campoMotivo = document.getElementById('modal-festivo-campo-motivo');
 
-    if (esFestivo) {
+    if (esLaborableForzado) {
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300";
+        badge.innerText = "⚡ Día forzado a laborable (" + (motivo || "Jornada laboral") + ")";
+        desc.innerText = "Este día no laborable se ha forzado como laborable. Puedes revertirlo a festivo o descanso habitual.";
+        inputAccion.value = "marcar_festivo";
+        btnSubmit.innerText = "Revertir a descanso / festivo";
+        btnSubmit.className = "px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition";
+        campoMotivo.classList.remove('opacity-50');
+    } else if (esFestivo) {
         badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-100 text-purple-900 border border-purple-300";
         badge.innerText = esOficial ? "🎉 Festivo oficial (" + (motivo || "Oficial") + ")" : "🛠 Parada de fábrica (" + (motivo || "Personalizada") + ")";
-        desc.innerText = "Actualmente no hay turno de fábrica ni autobuses programados para este día.";
+        desc.innerText = "Actualmente no hay turno de fábrica ni autobuses programados. Puedes marcarlo como laborable si hay turno especial.";
         inputAccion.value = "revertir_laborable";
-        btnSubmit.innerText = "Revertir a laborable";
-        btnSubmit.className = "px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 rounded-lg shadow-sm transition";
-        campoMotivo.classList.add('opacity-50');
+        btnSubmit.innerText = "Marcar como laborable";
+        btnSubmit.className = "px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition";
+        campoMotivo.classList.remove('opacity-50');
+    } else if (esDescanso) {
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-200 text-slate-800 border border-slate-300";
+        badge.innerText = "🛌 Fin de semana (Descanso)";
+        desc.innerText = "Día habitual de descanso. Puedes forzarlo a laborable asignándole turno de fábrica y autobuses.";
+        inputAccion.value = "marcar_laborable";
+        btnSubmit.innerText = "Marcar como laborable";
+        btnSubmit.className = "px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition";
+        campoMotivo.classList.remove('opacity-50');
     } else {
         badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300";
         badge.innerText = "🏢 Día laborable";
@@ -287,9 +401,32 @@ function cerrarModalFestivo() {
     if (modal) modal.classList.add('hidden');
 }
 
+function abrirModalTurnoSemana(lunesIso, turnoActual) {
+    const modal = document.getElementById('modal-turno-semana');
+    if (!modal) return;
+    document.getElementById('modal-turno-input-lunes').value = lunesIso;
+    document.getElementById('modal-turno-fecha-texto').innerText = 'Semana que inicia el lunes: ' + lunesIso;
+
+    const radios = document.getElementsByName('turno');
+    for (let r of radios) {
+        if (turnoActual && r.value === turnoActual) {
+            r.checked = true;
+        } else if (!turnoActual && r.value === 'RESTABLECER') {
+            r.checked = true;
+        }
+    }
+    modal.classList.remove('hidden');
+}
+
+function cerrarModalTurnoSemana() {
+    const modal = document.getElementById('modal-turno-semana');
+    if (modal) modal.classList.add('hidden');
+}
+
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         cerrarModalFestivo();
+        cerrarModalTurnoSemana();
     }
 });
 </script>

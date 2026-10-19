@@ -130,39 +130,44 @@ def obtener_turno_dia(
         fecha_base = cfg.fecha_base
         turno_inicial = cfg.turno_inicial
 
-    # Sabados (5) y Domingos (6) son descanso semanal (R3)
-    if fecha.weekday() in (5, 6):
-        return {
-            "fecha": fecha,
-            "es_descanso": True,
-            "es_festivo": False,
-            "nombre_festivo": None,
-            "motivo": None,
-            "codigo": None,
-            "nombre": "Descanso",
-            "color": "#94A3B8",
-            "fabrica": None,
-            "bus_ida": None,
-            "bus_vuelta": None,
-            "franja_libre": "Día completo",
-        }
+    # Determinación del turno: comprobar si hay excepción semanal para el lunes de esta semana (R2, R3)
+    lunes_semana = fecha - timedelta(days=fecha.weekday())
+    codigo = None
+    try:
+        from turnos.models import ExcepcionTurnoSemana
 
-    # Calculo determinista del bloque de 21 dias (R1)
-    dias_diferencia = (fecha - fecha_base).days
-    bloques_21 = dias_diferencia // 21
-    idx_inicio = ORDEN_ROTACION.index(turno_inicial)
-    idx_actual = (idx_inicio + bloques_21) % len(ORDEN_ROTACION)
-    codigo = ORDEN_ROTACION[idx_actual]
+        excepcion = ExcepcionTurnoSemana.objects.filter(lunes_semana=lunes_semana).first()
+        if excepcion and excepcion.turno in HORARIOS_TURNOS:
+            codigo = excepcion.turno
+    except Exception:  # noqa: BLE001
+        codigo = None
+
+    if codigo is None:
+        # Calculo determinista del bloque de 21 dias (R1)
+        dias_diferencia = (fecha - fecha_base).days
+        bloques_21 = dias_diferencia // 21
+        idx_inicio = ORDEN_ROTACION.index(turno_inicial)
+        idx_actual = (idx_inicio + bloques_21) % len(ORDEN_ROTACION)
+        codigo = ORDEN_ROTACION[idx_actual]
+
     horario = HORARIOS_TURNOS[codigo]
 
-    # Festivo o parada de fábrica (R1, R3, R4)
+    # Consultar si hay festivo, parada o excepción manual para este día (R1)
     info_festivo = consultar_festivo_dia(fecha)
+    es_laborable_forzado = (
+        info_festivo is not None
+        and info_festivo.get("modificado_manualmente", False)
+        and not info_festivo.get("es_festivo", True)
+    )
+
+    # 1. Festivo o parada de fábrica activa (R1, R4)
     if info_festivo and info_festivo.get("es_festivo"):
         motivo = info_festivo.get("motivo") or "Festivo / Parada"
         return {
             "fecha": fecha,
             "es_descanso": False,
             "es_festivo": True,
+            "es_laborable_forzado": False,
             "es_oficial": info_festivo.get("es_oficial", False),
             "nombre_festivo": motivo,
             "motivo": motivo,
@@ -175,10 +180,29 @@ def obtener_turno_dia(
             "franja_libre": "Día completo",
         }
 
+    # 2. Fines de semana: si no ha sido forzado explícitamente a laborable, son descanso semanal (R3)
+    if fecha.weekday() in (5, 6) and not es_laborable_forzado:
+        return {
+            "fecha": fecha,
+            "es_descanso": True,
+            "es_festivo": False,
+            "es_laborable_forzado": False,
+            "nombre_festivo": None,
+            "motivo": None,
+            "codigo": None,
+            "nombre": "Descanso",
+            "color": "#94A3B8",
+            "fabrica": None,
+            "bus_ida": None,
+            "bus_vuelta": None,
+            "franja_libre": "Día completo",
+        }
+
     return {
         "fecha": fecha,
         "es_descanso": False,
         "es_festivo": False,
+        "es_laborable_forzado": es_laborable_forzado,
         "nombre_festivo": None,
         "motivo": None,
         "codigo": codigo,
@@ -909,6 +933,9 @@ def obtener_eventos_semana(
                 "franja_libre": info_turno["franja_libre"],
                 "franjas_disponibles": franjas_semana.get(dia_fecha, []),
                 "hitos": hitos_dia,
+                "es_laborable_forzado": info_turno.get("es_laborable_forzado", False),
+                "lunes_semana": lunes,
+                "es_lunes": dia_fecha == lunes,
                 "bloques": todos_bloques,
             }
         )
@@ -1038,6 +1065,17 @@ def obtener_semanas_calendario(
 
     for s in range(num_semanas):
         dias_semana = []
+        lunes_sem = lunes_inicio + timedelta(days=s * 7)
+        excepcion_turno_sem = None
+        try:
+            from turnos.models import ExcepcionTurnoSemana
+
+            exc = ExcepcionTurnoSemana.objects.filter(lunes_semana=lunes_sem).first()
+            if exc:
+                excepcion_turno_sem = exc.turno
+        except Exception:  # noqa: BLE001, S110
+            pass
+
         for d in range(7):
             dia = lunes_inicio + timedelta(days=s * 7 + d)
             info = obtener_turno_dia(dia, config=config)
@@ -1046,6 +1084,9 @@ def obtener_semanas_calendario(
             info["numero_dia"] = dia.day
             info["mes"] = dia.strftime("%b")
             info["mismo_mes"] = dia.month == fecha_referencia.month
+            info["lunes_semana"] = lunes_sem
+            info["es_lunes"] = (d == 0)
+            info["excepcion_turno_semana"] = excepcion_turno_sem
             citas_dia = citas_por_dia.get(dia, [])
             info["citas"] = citas_dia
             info["total_citas"] = len(citas_dia)

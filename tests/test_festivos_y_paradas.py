@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -195,6 +195,138 @@ def test_r5_permisos_y_privacidad_solicitantes():
         {
             "fecha": "2026-04-15",
             "accion": "marcar_festivo",
+        },
+    )
+    assert resp_anon.status_code in (403, 302)
+
+
+@pytest.mark.django_db
+def test_r7_fin_de_semana_forzado_a_laborable():
+    """R1: Un fin de semana (sábado/domingo) forzado a laborable pierde condición de descanso y tiene turno de fábrica y bus."""
+    User.objects.create_user(username="pau", password="password123")
+    ConfiguracionTurno.objects.create(fecha_base=date(2026, 4, 1), turno_inicial="A")
+
+    sabado = date(2026, 4, 18)  # Sábado
+    assert sabado.weekday() == 5
+
+    # 1. Por defecto es descanso semanal
+    info_defecto = obtener_turno_dia(sabado)
+    assert info_defecto["es_descanso"] is True
+    assert info_defecto["es_festivo"] is False
+    assert info_defecto["fabrica"] is None
+    assert info_defecto["bus_ida"] is None
+
+    # 2. Pau marca el sábado como laborable mediante POST
+    client = Client()
+    client.login(username="pau", password="password123")
+    resp = client.post(
+        "/turnos/alternar-festivo/",
+        {
+            "fecha": "2026-04-18",
+            "accion": "revertir_laborable",
+            "motivo": "Turno extra de mantenimiento",
+        },
+        follow=True,
+    )
+    assert resp.status_code == 200
+
+    # 3. Comprobar que en FestivoParada es_festivo es False
+    fp = FestivoParada.objects.get(fecha=sabado)
+    assert fp.es_festivo is False
+
+    # 4. Comprobar que obtener_turno_dia devuelve día laborable con turno, fábrica y autobuses
+    info_laborable = obtener_turno_dia(sabado)
+    assert info_laborable["es_descanso"] is False
+    assert info_laborable["es_festivo"] is False
+    assert info_laborable["codigo"] in ("A", "B", "C")
+    assert info_laborable["fabrica"] is not None
+    assert info_laborable["bus_ida"] is not None
+    assert info_laborable["bus_vuelta"] is not None
+
+
+@pytest.mark.django_db
+def test_r8_cambio_turno_semanal_completo_desde_el_lunes():
+    """R2 (Criterio portante): Cambio masivo de turno de toda la semana desde el lunes con persistencia y restablecimiento."""
+    from turnos.models import ExcepcionTurnoSemana
+
+    User.objects.create_user(username="pau", password="password123")
+    ConfiguracionTurno.objects.create(fecha_base=date(2026, 4, 1), turno_inicial="A")
+
+    client = Client()
+    client.login(username="pau", password="password123")
+
+    lunes_semana = date(2026, 4, 13)
+    assert lunes_semana.weekday() == 0
+
+    # Turno natural previo para esa semana
+    info_previa = obtener_turno_dia(lunes_semana)
+    turno_previo = info_previa["codigo"]
+
+    # Elegimos un turno distinto para anular toda la semana
+    nuevo_turno = "C" if turno_previo != "C" else "B"
+
+    # 1. Pau cambia el turno de la semana completa a nuevo_turno
+    resp_cambio = client.post(
+        "/turnos/cambiar-turno-semana/",
+        {
+            "lunes_semana": "2026-04-13",
+            "turno": nuevo_turno,
+        },
+        follow=True,
+    )
+    assert resp_cambio.status_code == 200
+
+    # Verificar registro en base de datos
+    excepcion = ExcepcionTurnoSemana.objects.get(lunes_semana=lunes_semana)
+    assert excepcion.turno == nuevo_turno
+
+    # Verificar que de lunes a viernes toda la semana tiene nuevo_turno
+    for offset in range(5):  # Lunes a viernes
+        dia = lunes_semana + timedelta(days=offset)
+        info_dia = obtener_turno_dia(dia)
+        assert info_dia["codigo"] == nuevo_turno, f"El día {dia} debería tener turno {nuevo_turno}"
+
+    # 2. Pau restablece la rotación normal
+    resp_restablecer = client.post(
+        "/turnos/cambiar-turno-semana/",
+        {
+            "lunes_semana": "2026-04-13",
+            "turno": "restablecer",
+        },
+        follow=True,
+    )
+    assert resp_restablecer.status_code == 200
+    assert not ExcepcionTurnoSemana.objects.filter(lunes_semana=lunes_semana).exists()
+
+    # Comprobar que vuelve al turno previo
+    info_restablecida = obtener_turno_dia(lunes_semana)
+    assert info_restablecida["codigo"] == turno_previo
+
+
+@pytest.mark.django_db
+def test_r9_permisos_cambio_turno_semanal_solicitantes():
+    """R4: Solo Pau o superusuarios pueden modificar el turno semanal; solicitantes y anónimos reciben 403 o redirección."""
+    User.objects.create_user(username="pol", password="password123")
+    ConfiguracionTurno.objects.create(fecha_base=date(2026, 4, 1), turno_inicial="A")
+
+    client_pol = Client()
+    client_pol.login(username="pol", password="password123")
+
+    resp_pol = client_pol.post(
+        "/turnos/cambiar-turno-semana/",
+        {
+            "lunes_semana": "2026-04-13",
+            "turno": "B",
+        },
+    )
+    assert resp_pol.status_code == 403
+
+    client_anon = Client()
+    resp_anon = client_anon.post(
+        "/turnos/cambiar-turno-semana/",
+        {
+            "lunes_semana": "2026-04-13",
+            "turno": "B",
         },
     )
     assert resp_anon.status_code in (403, 302)

@@ -5,6 +5,7 @@ from planificador_turnos.views import health_check_view, home, login_view, logou
 from turnos.views import (
     alternar_festivo_view,
     calendario_semanal_view,
+    cambiar_turno_semana_view,
     cancelar_cita_view,
     configurar_calendario_uni,
     configurar_turnos,
@@ -42,6 +43,11 @@ urlpatterns = [
         "turnos/guardar-actividades-bus/",
         guardar_actividades_bus_view,
         name="guardar_actividades_bus",
+    ),
+    path(
+        "turnos/cambiar-turno-semana/",
+        cambiar_turno_semana_view,
+        name="cambiar_turno_semana",
     ),
 ]
 
