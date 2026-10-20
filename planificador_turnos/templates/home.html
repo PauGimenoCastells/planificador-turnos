@@ -22,6 +22,11 @@
             </div>
 
             {% if user.is_authenticated %}
+            {% if user.username == "pau" or user.username == "admin" or user.is_superuser %}
+            <a href="{% url 'gestion_usuarios' %}" class="px-3 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-950 border border-cyan-200 text-xs font-bold rounded-full shadow-xs transition flex items-center gap-1">
+                <span>🔑</span> Contraseñas
+            </a>
+            {% endif %}
             <div class="flex items-center gap-2 bg-white border border-slate-200 px-3.5 py-1.5 rounded-full text-xs shadow-sm">
                 <span class="font-medium text-slate-700">Hola, {{ user.username }}</span>
                 <a href="/logout/" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-semibold ml-2 transition">

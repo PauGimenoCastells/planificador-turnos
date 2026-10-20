@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.http import (
     HttpResponseBadRequest,
     HttpResponseForbidden,
@@ -753,4 +754,60 @@ def calendario_semanal_view(request):
     req_copy["vista"] = "semana"
     request.GET = req_copy
     return home(request)
+
+
+@login_required(login_url="login")
+def gestion_usuarios_view(request):
+    """Permite a Pau o administradores gestionar contraseñas y crear cuentas de compañeros."""
+    if not usuario_puede_gestionar(request.user):
+        return HttpResponseForbidden(
+            "Acceso denegado: solo Pau o administradores pueden gestionar usuarios y contraseñas."
+        )
+
+    error = None
+    exito = None
+
+    if request.method == "POST":
+        accion = request.POST.get("accion", "").strip()
+        if accion == "cambiar_password":
+            user_id = request.POST.get("user_id", "").strip()
+            nueva_password = request.POST.get("nueva_password", "").strip()
+            if not user_id:
+                error = "Identificador de usuario no proporcionado."
+            elif not nueva_password:
+                error = "La nueva contraseña no puede estar vacía."
+            else:
+                try:
+                    u = User.objects.get(id=user_id)
+                    u.set_password(nueva_password)
+                    u.save()
+                    exito = f"Contraseña actualizada correctamente para el usuario {u.username}."
+                except (User.DoesNotExist, ValueError):
+                    error = "El usuario seleccionado no existe."
+        elif accion == "crear_usuario":
+            username = request.POST.get("username", "").strip()
+            password = request.POST.get("password", "").strip()
+            if not username:
+                error = "El nombre de usuario no puede estar vacío."
+            elif not password:
+                error = "La contraseña no puede estar vacía."
+            elif User.objects.filter(username=username).exists():
+                error = f"El usuario '{username}' ya existe. Elija otro nombre."
+            else:
+                User.objects.create_user(username=username, password=password)
+                exito = f"Compañero '{username}' creado correctamente con perfil solicitante."
+        else:
+            error = "Acción no reconocida."
+
+    usuarios = User.objects.all().order_by("username")
+    return render(
+        request,
+        "turnos/usuarios.html",
+        {
+            "usuarios": usuarios,
+            "error": error,
+            "exito": exito,
+        },
+    )
+
 

@@ -11,6 +11,7 @@ from turnos.views import (
     configurar_turnos,
     confirmar_cita_view,
     contraofertar_cita_view,
+    gestion_usuarios_view,
     guardar_actividades_bus_view,
     rechazar_cita_view,
     responder_contraoferta_view,
@@ -50,5 +51,6 @@ urlpatterns = [
         cambiar_turno_semana_view,
         name="cambiar_turno_semana",
     ),
+    path("turnos/usuarios/", gestion_usuarios_view, name="gestion_usuarios"),
 ]
 
