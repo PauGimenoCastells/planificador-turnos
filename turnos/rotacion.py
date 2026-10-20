@@ -150,8 +150,9 @@ def obtener_turno_dia(
             lunes_vigencia = vigencia.fecha_inicio - timedelta(days=vigencia.fecha_inicio.weekday())
             lunes_actual = fecha - timedelta(days=fecha.weekday())
             semanas_diferencia = (lunes_actual - lunes_vigencia).days // 7
+            bloques_21 = semanas_diferencia // 3
             idx_inicio = ORDEN_ROTACION.index(vigencia.turno_inicial.upper())
-            idx_actual = (idx_inicio + semanas_diferencia) % len(ORDEN_ROTACION)
+            idx_actual = (idx_inicio + bloques_21) % len(ORDEN_ROTACION)
             codigo = ORDEN_ROTACION[idx_actual]
         else:
             if config is not None:

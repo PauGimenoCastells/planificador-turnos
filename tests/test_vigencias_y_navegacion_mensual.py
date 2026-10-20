@@ -68,20 +68,28 @@ def test_r2_criterio_portante_resolucion_turno_por_vigencia_activa():
     fecha_mayo = date(2026, 5, 4)  # Lunes
     lunes_v1 = date(2026, 1, 1) - timedelta(days=date(2026, 1, 1).weekday())
     semanas_diff_mayo = (fecha_mayo - lunes_v1).days // 7
-    esperado_mayo = ORDEN_ROTACION[semanas_diff_mayo % len(ORDEN_ROTACION)]
+    bloques_diff_mayo = semanas_diff_mayo // 3
+    esperado_mayo = ORDEN_ROTACION[bloques_diff_mayo % len(ORDEN_ROTACION)]
     info_mayo = obtener_turno_dia(fecha_mayo)
     assert info_mayo["codigo"] == esperado_mayo
 
     # En julio de 2026 (a partir del 1 de julio): debe usar v2 (2026-07-01, Turno C)
     # 2026-07-01 es miércoles -> lunes_vigencia es 2026-06-29.
-    fecha_julio = date(2026, 7, 1)  # Miércoles
-    info_julio = obtener_turno_dia(fecha_julio)
-    assert info_julio["codigo"] == "C"
+    # El turno C debe mantenerse durante un bloque tri-semanal completo (3 semanas = 21 días)
+    fecha_julio_sem1 = date(2026, 7, 1)  # Miércoles semana 1
+    assert obtener_turno_dia(fecha_julio_sem1)["codigo"] == "C"
 
-    # La semana siguiente de julio (lunes 2026-07-06): semanas_diferencia = 1 -> ORDEN_ROTACION tras C es B
-    fecha_julio_sig = date(2026, 7, 6)
-    info_julio_sig = obtener_turno_dia(fecha_julio_sig)
-    assert info_julio_sig["codigo"] == "B"
+    # Semana 2 (lunes 2026-07-06): sigue en Turno C (semana 2 del bloque de 3 semanas)
+    fecha_julio_sem2 = date(2026, 7, 6)
+    assert obtener_turno_dia(fecha_julio_sem2)["codigo"] == "C"
+
+    # Semana 3 (lunes 2026-07-13): sigue en Turno C (semana 3 del bloque de 3 semanas)
+    fecha_julio_sem3 = date(2026, 7, 13)
+    assert obtener_turno_dia(fecha_julio_sem3)["codigo"] == "C"
+
+    # Semana 4 (lunes 2026-07-20, día 21 desde lunes_vigencia): pasa a Turno B (siguiente bloque de 3 semanas)
+    fecha_julio_sem4 = date(2026, 7, 20)
+    assert obtener_turno_dia(fecha_julio_sem4)["codigo"] == "B"
 
 
 @pytest.mark.django_db
