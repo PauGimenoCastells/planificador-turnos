@@ -18,6 +18,7 @@ from turnos.models import (
     ExcepcionTurnoSemana,
     FestivoParada,
     ReubicacionClase,
+    VigenciaRotacion,
 )
 from turnos.rotacion import (
     FESTIVOS_OFICIALES_MARTORELL_2026,
@@ -56,7 +57,7 @@ def usuario_puede_gestionar(user) -> bool:
 
 @login_required(login_url="login")
 def configurar_turnos(request):
-    """Permite a Pau o admin modificar la fecha base y el turno de anclaje."""
+    """Permite a Pau o admin modificar la fecha base, el turno de anclaje y las vigencias de rotación."""
     if not usuario_puede_gestionar(request.user):
         return HttpResponseForbidden(
             "Acceso denegado: solo Pau o administradores pueden modificar los turnos."
@@ -66,26 +67,48 @@ def configurar_turnos(request):
     mensaje = None
 
     if request.method == "POST":
-        fecha_base_str = request.POST.get("fecha_base", "").strip()
-        turno_inicial = request.POST.get("turno_inicial", "").strip().upper()
-
-        if fecha_base_str and turno_inicial in dict(ConfiguracionTurno.OPCIONES_TURNO):
-            try:
-                nueva_fecha = date.fromisoformat(fecha_base_str)
-                config.fecha_base = nueva_fecha
-                config.turno_inicial = turno_inicial
-                config.save()
-                return redirect("home")
-            except ValueError:
-                mensaje = "Formato de fecha inválido. Utilice AAAA-MM-DD."
+        accion = request.POST.get("accion", "").strip()
+        if accion == "crear_vigencia" or (
+            "fecha_inicio" in request.POST and "fecha_base" not in request.POST
+        ):
+            fecha_inicio_str = request.POST.get("fecha_inicio", "").strip()
+            turno_inicial = request.POST.get("turno_inicial", "").strip().upper()
+            if fecha_inicio_str and turno_inicial in ("A", "B", "C"):
+                try:
+                    fecha_inicio = date.fromisoformat(fecha_inicio_str)
+                    VigenciaRotacion.objects.update_or_create(
+                        fecha_inicio=fecha_inicio,
+                        defaults={"turno_inicial": turno_inicial},
+                    )
+                    return redirect(request.path)
+                except ValueError:
+                    mensaje = "Formato de fecha inválido. Utilice AAAA-MM-DD."
+            else:
+                mensaje = "Datos inválidos para la nueva vigencia de rotación."
         else:
-            mensaje = "Datos inválidos. Compruebe los campos."
+            fecha_base_str = request.POST.get("fecha_base", "").strip()
+            turno_inicial = request.POST.get("turno_inicial", "").strip().upper()
+
+            if fecha_base_str and turno_inicial in dict(ConfiguracionTurno.OPCIONES_TURNO):
+                try:
+                    nueva_fecha = date.fromisoformat(fecha_base_str)
+                    config.fecha_base = nueva_fecha
+                    config.turno_inicial = turno_inicial
+                    config.save()
+                    return redirect("home")
+                except ValueError:
+                    mensaje = "Formato de fecha inválido. Utilice AAAA-MM-DD."
+            else:
+                mensaje = "Datos inválidos. Compruebe los campos."
+
+    vigencias = list(VigenciaRotacion.objects.order_by("fecha_inicio"))
 
     return render(
         request,
-        "turnos/configurar.html",
+        "turnos/configurar_turnos.html",
         {
             "config": config,
+            "vigencias": vigencias,
             "opciones_turno": ConfiguracionTurno.OPCIONES_TURNO,
             "error": mensaje,
         },

@@ -290,3 +290,37 @@ class ExcepcionTurnoSemana(models.Model):
     def __str__(self) -> str:
         return f"Semana {self.lunes_semana}: Turno {self.turno}"
 
+
+class VigenciaRotacion(models.Model):
+    """Punto de anclaje/inicio o restablecimiento de la rotación de turnos a partir de una fecha."""
+
+    OPCIONES_TURNO: ClassVar[list[tuple[str, str]]] = [
+        ("A", "A"),
+        ("B", "B"),
+        ("C", "C"),
+    ]
+
+    fecha_inicio = models.DateField(
+        unique=True,
+        db_index=True,
+        verbose_name="Fecha de inicio de la vigencia",
+    )
+    turno_inicial = models.CharField(
+        max_length=1,
+        choices=OPCIONES_TURNO,
+        verbose_name="Turno inicial",
+    )
+    creado_el = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+
+    class Meta:
+        verbose_name = "Vigencia de rotación"
+        verbose_name_plural = "Vigencias de rotación"
+        ordering: ClassVar[list[str]] = ["fecha_inicio"]
+
+    def __str__(self) -> str:
+        return f"Vigencia desde {self.fecha_inicio}: Turno {self.turno_inicial}"
+
+

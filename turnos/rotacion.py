@@ -120,16 +120,6 @@ def obtener_turno_dia(
     config: Any | None = None,
 ) -> dict[str, Any]:
     """Calcula el turno correspondiente a una fecha segun el ciclo determinista de 21 dias y festivos."""
-    if config is not None:
-        fecha_base = config.fecha_base
-        turno_inicial = config.turno_inicial
-    elif fecha_base is None:
-        from turnos.models import ConfiguracionTurno
-
-        cfg = ConfiguracionTurno.obtener_activa()
-        fecha_base = cfg.fecha_base
-        turno_inicial = cfg.turno_inicial
-
     # Determinación del turno: comprobar si hay excepción semanal para el lunes de esta semana (R2, R3)
     lunes_semana = fecha - timedelta(days=fecha.weekday())
     codigo = None
@@ -143,12 +133,43 @@ def obtener_turno_dia(
         codigo = None
 
     if codigo is None:
-        # Calculo determinista del bloque de 21 dias (R1)
-        dias_diferencia = (fecha - fecha_base).days
-        bloques_21 = dias_diferencia // 21
-        idx_inicio = ORDEN_ROTACION.index(turno_inicial)
-        idx_actual = (idx_inicio + bloques_21) % len(ORDEN_ROTACION)
-        codigo = ORDEN_ROTACION[idx_actual]
+        vigencia = None
+        if fecha_base is None:
+            try:
+                from turnos.models import VigenciaRotacion
+
+                vigencia = (
+                    VigenciaRotacion.objects.filter(fecha_inicio__lte=fecha)
+                    .order_by("-fecha_inicio")
+                    .first()
+                )
+            except Exception:  # noqa: BLE001
+                vigencia = None
+
+        if vigencia is not None:
+            lunes_vigencia = vigencia.fecha_inicio - timedelta(days=vigencia.fecha_inicio.weekday())
+            lunes_actual = fecha - timedelta(days=fecha.weekday())
+            semanas_diferencia = (lunes_actual - lunes_vigencia).days // 7
+            idx_inicio = ORDEN_ROTACION.index(vigencia.turno_inicial.upper())
+            idx_actual = (idx_inicio + semanas_diferencia) % len(ORDEN_ROTACION)
+            codigo = ORDEN_ROTACION[idx_actual]
+        else:
+            if config is not None:
+                fecha_base = config.fecha_base
+                turno_inicial = config.turno_inicial
+            elif fecha_base is None:
+                from turnos.models import ConfiguracionTurno
+
+                cfg = ConfiguracionTurno.obtener_activa()
+                fecha_base = cfg.fecha_base
+                turno_inicial = cfg.turno_inicial
+
+            # Calculo determinista del bloque de 21 dias (R1)
+            dias_diferencia = (fecha - fecha_base).days
+            bloques_21 = dias_diferencia // 21
+            idx_inicio = ORDEN_ROTACION.index(turno_inicial)
+            idx_actual = (idx_inicio + bloques_21) % len(ORDEN_ROTACION)
+            codigo = ORDEN_ROTACION[idx_actual]
 
     horario = HORARIOS_TURNOS[codigo]
 

@@ -157,6 +157,22 @@ def home(request):
         else:
             mini_next_fecha = date(mini_ano, mini_mes + 1, 1).isoformat()
 
+        # Navegación mensual natural (R1)
+        if fecha_referencia.month == 1:
+            fecha_mes_anterior = date(fecha_referencia.year - 1, 12, 1).isoformat()
+        else:
+            fecha_mes_anterior = date(fecha_referencia.year, fecha_referencia.month - 1, 1).isoformat()
+
+        if fecha_referencia.month == 12:
+            fecha_mes_siguiente = date(fecha_referencia.year + 1, 1, 1).isoformat()
+        else:
+            fecha_mes_siguiente = date(fecha_referencia.year, fecha_referencia.month + 1, 1).isoformat()
+
+        if vista == "mes":
+            titulo_mes_ano = f"{MESES_ES[fecha_referencia.month]} {fecha_referencia.year}"
+        else:
+            titulo_mes_ano = f"{MESES_ES[lunes_semana.month]} {lunes_semana.year}"
+
         excepcion_turno_semana = None
         if puede_gestionar:
             try:
@@ -187,7 +203,9 @@ def home(request):
                 "domingo_semana": domingo_semana,
                 "fecha_semana_anterior": (lunes_semana - timedelta(days=7)).isoformat(),
                 "fecha_semana_siguiente": (lunes_semana + timedelta(days=7)).isoformat(),
-                "titulo_mes_ano": f"{MESES_ES[lunes_semana.month]} {lunes_semana.year}",
+                "fecha_mes_anterior": fecha_mes_anterior,
+                "fecha_mes_siguiente": fecha_mes_siguiente,
+                "titulo_mes_ano": titulo_mes_ano,
                 "mini_prev_fecha": mini_prev_fecha,
                 "mini_next_fecha": mini_next_fecha,
                 "semanas": semanas_mes,

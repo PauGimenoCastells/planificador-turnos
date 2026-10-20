@@ -26,6 +26,7 @@ urlpatterns = [
     path("turnos/semanal/", calendario_semanal_view, name="calendario_semanal"),
     path("login/", login_view, name="login"),
     path("logout/", logout_view, name="logout"),
+    path("configurar-turnos/", configurar_turnos, name="configurar_turnos_root"),
     path("turnos/configurar/", configurar_turnos, name="configurar_turnos"),
     path("turnos/calendario-uni/", configurar_calendario_uni, name="configurar_calendario_uni"),
     path("turnos/alternar-festivo/", alternar_festivo_view, name="alternar_festivo"),

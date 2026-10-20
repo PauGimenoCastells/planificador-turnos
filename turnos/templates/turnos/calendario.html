@@ -4,7 +4,7 @@
         <div>
             <div class="flex items-center gap-3">
                 <span class="inline-block w-3 h-3 rounded-full bg-[#00CCFF] animate-pulse"></span>
-                <h2 class="text-xl font-bold tracking-tight text-white">Calendario de Turnos de Fábrica</h2>
+                <h2 class="text-xl font-bold tracking-tight text-white">Calendario de Turnos de Fábrica · {{ titulo_mes_ano }}</h2>
             </div>
             <p class="text-xs text-slate-400 mt-1">
                 Rotación tri-semanal determinista (A &rarr; C &rarr; B) · Base: <span class="text-[#00CCFF] font-semibold">{{ config.fecha_base|date:"d/m/Y" }}</span> (Turno {{ config.turno_inicial }})
@@ -14,21 +14,21 @@
         <div class="flex flex-wrap items-center gap-2">
             <!-- Selector de vistas Mes / Semana -->
             <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 mr-1">
-                <a href="?vista=mes" class="px-3 py-1 text-xs font-bold rounded-lg bg-[#00CCFF] text-slate-950 transition">
+                <a href="/?vista=mes" class="px-3 py-1 text-xs font-bold rounded-lg bg-[#00CCFF] text-slate-950 transition">
                     Mes
                 </a>
-                <a href="?vista=semana" class="px-3 py-1 text-xs font-medium text-slate-300 hover:text-white transition">
+                <a href="/?vista=semana" class="px-3 py-1 text-xs font-medium text-slate-300 hover:text-white transition">
                     Semana
                 </a>
             </div>
 
-            <a href="?offset={{ offset_prev }}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition" title="Semana anterior">
+            <a href="/?vista=mes&fecha={{ fecha_mes_anterior }}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition" title="Mes anterior">
                 &larr; Anterior
             </a>
-            <a href="?offset=0" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[#00CCFF] text-xs font-semibold rounded-lg border border-slate-700 transition">
-                Semana actual
+            <a href="/?vista=mes" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[#00CCFF] text-xs font-semibold rounded-lg border border-slate-700 transition">
+                Mes actual
             </a>
-            <a href="?offset={{ offset_next }}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition" title="Siguiente semana">
+            <a href="/?vista=mes&fecha={{ fecha_mes_siguiente }}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition" title="Siguiente mes">
                 Siguiente &rarr;
             </a>
 
